@@ -1,5 +1,19 @@
 # File: backend/fastapi/api/index.py
 
+import subprocess
+import sys
+
+# Install required packages if not present (in the specified order)
+required_packages = ["sentence_transformers", "torch"]
+for package in required_packages:
+    try:
+        __import__(package)
+    except ImportError:
+        print(f"{package} not found, installing at runtime...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+        print(f"{package} installed successfully.")
+
+# Continue with the rest of your imports and application code
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Dict
@@ -10,6 +24,7 @@ import warnings
 import asyncio
 import numpy as np
 import torch  # Import torch to work with Tensors
+from sentence_transformers import SentenceTransformer  # Import Sentence-BERT model after installing
 from backend.fastapi.utils.logger import logger
 from backend.fastapi.data.data_loader import load_dataset
 from backend.fastapi.models.model_definitions import load_model
