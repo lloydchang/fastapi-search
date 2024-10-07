@@ -5,3 +5,4 @@ numpy
 joblib
 scipy
 threadpoolctl
+pandas

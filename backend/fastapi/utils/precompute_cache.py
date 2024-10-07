@@ -2,82 +2,93 @@
 
 import os
 import numpy as np
-from typing import Any, Dict, List
+import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
+from typing import Any, List, Dict  # Ensure all type hints are imported
 from backend.fastapi.cache.cache_manager_write import save_cache
+import logging
 
-def load_documents() -> List[str]:
-    """
-    Load documents from your data source.
-    Replace this with your actual document loading logic.
-    """
-    # Example: You might load documents from a file or database
-    return [
-        "This is the first document.",
-        "This document is the second document.",
-        "And this is the third one.",
-        "Is this the first document?"
-    ]
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
+logger = logging.getLogger(__name__)
 
-def create_tfidf_matrix(documents: List[str]) -> Any:
+def load_tedx_documents(csv_file_path: str) -> List[Dict[str, str]]:
     """
-    Creates a TF-IDF sparse matrix from the provided documents.
+    Load TEDx talks from the provided CSV file and extract metadata and text content.
 
     Args:
-        documents (List[str]): List of document strings.
+        csv_file_path (str): Path to the TEDx CSV file.
+
+    Returns:
+        List[Dict[str, str]]: List of TEDx talks with metadata.
+    """
+    # Load the TEDx CSV file into a DataFrame
+    tedx_df = pd.read_csv(csv_file_path)
+
+    # Extract metadata (slug, description, presenterDisplayName) and drop missing values
+    if 'description' not in tedx_df.columns:
+        raise ValueError(f"Column 'description' not found in the CSV file {csv_file_path}")
+
+    documents = tedx_df[['slug', 'description', 'presenterDisplayName']].dropna().to_dict('records')
+    logger.info(f"Loaded {len(documents)} TEDx documents from the CSV file.")
+    
+    return documents
+
+def create_tfidf_matrix(documents: List[Dict[str, str]]) -> Any:
+    """
+    Create a TF-IDF matrix from the provided document descriptions.
+
+    Args:
+        documents (List[Dict[str, str]]): List of document metadata.
 
     Returns:
         Any: Sparse TF-IDF matrix and the vectorizer instance.
     """
-    vectorizer = TfidfVectorizer(
-        stop_words='english',
-        ngram_range=(1, 2),  # Consider both unigrams and bigrams
-        max_features=10000,  # Limit to top 10,000 features
-    )
-    tfidf_matrix = vectorizer.fit_transform(documents)
+    descriptions = [doc['description'] for doc in documents]
+    vectorizer = TfidfVectorizer(stop_words='english', ngram_range=(1, 2), max_features=10000)
+    tfidf_matrix = vectorizer.fit_transform(descriptions)
     return tfidf_matrix, vectorizer
 
-def main():
-    # Load your documents
-    documents = load_documents()
-    print(f"Loaded {len(documents)} documents.")
-
-    # Create TF-IDF matrix and vectorizer
-    tfidf_matrix, vectorizer = create_tfidf_matrix(documents)
-
-    # Debug: Print vectorizer attributes
-    print("Vectorizer Attributes:")
-    print(f"stop_words: {vectorizer.stop_words}")
-    print(f"vocabulary size: {len(vectorizer.vocabulary_)}")
-    print(f"ngram_range: {vectorizer.ngram_range}")
-    print(f"max_features: {vectorizer.max_features}")
-
-    # Define cache directory and file paths
-    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-    cache_dir = os.path.join(base_dir, "backend", "fastapi", "cache")
-    os.makedirs(cache_dir, exist_ok=True)
+def save_tfidf_components(tfidf_matrix: np.ndarray, vectorizer: TfidfVectorizer, documents: List[Dict[str, str]], cache_dir: str):
+    """Save the TF-IDF matrix, vectorizer metadata, and document metadata."""
     tfidf_cache_path = os.path.join(cache_dir, "tfidf_matrix.npz")
     tfidf_metadata_path = os.path.join(cache_dir, "tfidf_metadata.npz")
+    document_metadata_path = os.path.join(cache_dir, "document_metadata.npz")
 
-    # Save cache using the write cache manager
-    save_cache({'tfidf_matrix': tfidf_matrix}, tfidf_cache_path)
+    # Convert sparse matrix to dense format for saving
+    tfidf_dense = tfidf_matrix.toarray()
 
-    # Save vectorizer metadata
-    vectorizer_params = {
-        'stop_words': vectorizer.stop_words,
-        'ngram_range': vectorizer.ngram_range,
-        'max_features': vectorizer.max_features,
-        # Add other parameters as needed
-    }
+    # Save the dense TF-IDF matrix
+    save_cache({'tfidf_matrix': tfidf_dense}, tfidf_cache_path)
 
+    # Save metadata (vocabulary and IDF values)
     np.savez_compressed(
         tfidf_metadata_path,
         vocabulary=vectorizer.vocabulary_,
-        vectorizer_params=vectorizer_params
+        idf_values=vectorizer.idf_
     )
-    print(f"Vectorizer metadata saved to {tfidf_metadata_path}")
+    logger.info(f"TF-IDF matrix and metadata saved to {tfidf_cache_path} and {tfidf_metadata_path}")
 
-    print("Precompute cache written successfully.")
+    # Save document metadata for semantic search
+    np.savez_compressed(document_metadata_path, documents=documents)
+    logger.info(f"Document metadata saved to {document_metadata_path}")
+
+def precompute_cache():
+    """Main precomputation process to build and save TF-IDF data."""
+    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    cache_dir = os.path.join(base_dir, "backend", "fastapi", "cache")
+    csv_file_path = os.path.join(base_dir, "data", "tedx_talks.csv")  # Adjust the path as needed
+
+    # Load TEDx talk documents from the CSV file
+    documents = load_tedx_documents(csv_file_path)
+
+    # Create the TF-IDF matrix and vectorizer using the loaded TEDx documents
+    tfidf_matrix, vectorizer = create_tfidf_matrix(documents)
+
+    # Save the generated TF-IDF components
+    os.makedirs(cache_dir, exist_ok=True)
+    save_tfidf_components(tfidf_matrix, vectorizer, documents, cache_dir)
+    logger.info("Precompute cache written successfully to the cache directory.")
 
 if __name__ == "__main__":
-    main()
+    precompute_cache()
