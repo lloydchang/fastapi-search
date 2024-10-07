@@ -6,11 +6,6 @@
       "use": "@vercel/python"
     }
   ],
-  "functions": {
-    "api/*.py": {
-      "includeFiles": "backend/fastapi/data/github-mauropelucchi-tedx_dataset-update_2024-details.csv"
-    }
-  },
   "routes": [
     {
       "src": "/(.*)",
