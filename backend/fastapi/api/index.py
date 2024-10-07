@@ -3,8 +3,8 @@
 import subprocess
 import sys
 
-# Install required packages if not present (in the specified order)
-required_packages = ["sentence_transformers", "torch"]
+# Install required packages in the specified order with torch-cpu instead of full torch
+required_packages = ["sentence_transformers", "torch-cpu"]
 for package in required_packages:
     try:
         __import__(package)
