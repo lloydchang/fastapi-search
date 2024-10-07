@@ -10,7 +10,7 @@
   "routes": [
     {
       "src": "/(.*)",
-      "dest": "backend/fastapi/api/index.py"
+      "dest": "/backend/fastapi/api/index.py"
     }
   ]
 }
