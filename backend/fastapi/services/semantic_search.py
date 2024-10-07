@@ -122,7 +122,8 @@ def semantic_search(query: str, cache_dir: str, top_n: int = 5) -> List[Dict]:
                 'similarity': float(cosine_similarities[idx]),
                 'slug': documents[idx]['slug'],
                 'description': documents[idx]['description'],
-                'presenter': documents[idx]['presenterDisplayName']
+                'presenter': documents[idx]['presenterDisplayName'],
+                'sdg_tags': documents[idx].get('sdg_tags', [])  # Add sdg_tags to the result
             } for idx in top_indices
         ]
         debug_log(f"Search results: {results}")

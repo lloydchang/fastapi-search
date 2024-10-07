@@ -55,6 +55,10 @@ def search(request: Request, query: str = Query(..., min_length=1, max_length=10
         if not results or all(result.get('similarity', 0) == 0 for result in results):
             return JSONResponse(status_code=200, content={"message": "No results found."})
 
+        # Include sdg_tags in the search results
+        for result in results:
+            result['sdg_tags'] = result.get('sdg_tags', [])  # Ensure sdg_tags are included in the results
+
     except RuntimeError as e:
         print(f"{request_uuid} [Cache Error] {e}")
         raise HTTPException(status_code=503, detail="Precomputed data initialization failed.")

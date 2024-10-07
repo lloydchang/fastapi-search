@@ -49,17 +49,22 @@ def get_sdg_tags_for_documents(documents: List[Dict[str, str]], sdg_keywords: Di
         matched_tags = []
         for i in np.argsort(cosine_similarities)[::-1]:  # Sort indices in descending order
             if cosine_similarities[i] > 0.1:  # Threshold can be adjusted
-                # Get the index in the flattened SDG keyword list
-                keyword_index = i
                 # Identify which SDG tag this keyword belongs to
                 for sdg, keywords in sdg_keywords.items():
-                    if keyword_index < len(keywords):
+                    if i < len(keywords):
                         matched_tags.append(sdg)
                         break
             else:
                 break  # Stop if the similarity is below the threshold
 
+        # If no tags matched, find the closest one
+        if not matched_tags:
+            closest_index = np.argmax(cosine_similarities)  # Find index of the highest similarity
+            closest_sdg = list(sdg_keywords.keys())[closest_index // len(list(sdg_keywords.values())[0])]  # Determine SDG tag
+            matched_tags.append(closest_sdg)  # Assign the closest SDG tag
+
         doc['sdg_tags'] = matched_tags  # Add matched SDG tags to the document
+        logger.info(f"Document '{doc['slug']}' assigned SDG tags: {matched_tags}")  # Log the assigned tags
 
 def save_sparse_matrix(tfidf_matrix, cache_dir: str):
     """Save sparse matrix in a numpy-compatible format."""
@@ -117,4 +122,3 @@ def precompute_cache():
 
 if __name__ == "__main__":
     precompute_cache()
-    
