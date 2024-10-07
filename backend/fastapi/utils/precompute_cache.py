@@ -4,8 +4,9 @@ import os
 import numpy as np
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 from typing import Any, List, Dict
-from backend.fastapi.cache.cache_manager_write import save_cache
+from backend.fastapi.data.sdg_keywords import sdg_keywords  # Import SDG keywords
 import logging
 
 # Configure logging
@@ -17,6 +18,7 @@ def load_tedx_documents(csv_file_path: str) -> List[Dict[str, str]]:
     tedx_df = pd.read_csv(csv_file_path)
     if 'description' not in tedx_df.columns:
         raise ValueError(f"Column 'description' not found in the CSV file {csv_file_path}")
+    
     documents = tedx_df[['slug', 'description', 'presenterDisplayName']].dropna().to_dict('records')
     logger.info(f"Loaded {len(documents)} TEDx documents from the CSV file.")
     return documents
@@ -28,6 +30,36 @@ def create_tfidf_matrix(documents: List[Dict[str, str]]) -> Any:
     tfidf_matrix = vectorizer.fit_transform(descriptions)
     logger.info(f"TF-IDF matrix created. Shape: {tfidf_matrix.shape}")
     return tfidf_matrix, vectorizer
+
+def get_sdg_tags_for_documents(documents: List[Dict[str, str]], sdg_keywords: Dict[str, List[str]]) -> None:
+    """Assign SDG tags to documents based on semantic similarity to SDG keywords."""
+    # Flatten SDG keywords for vectorization
+    sdg_keyword_list = [keyword for keywords in sdg_keywords.values() for keyword in keywords]
+    
+    # Create TF-IDF vectorizer and transform SDG keywords
+    vectorizer = TfidfVectorizer(stop_words='english')
+    sdg_tfidf_matrix = vectorizer.fit_transform(sdg_keyword_list)
+
+    for doc in documents:
+        description_vector = vectorizer.transform([doc['description']])
+        # Calculate cosine similarity with SDG keywords
+        cosine_similarities = cosine_similarity(description_vector, sdg_tfidf_matrix).flatten()
+        
+        # Assign SDG tags based on high similarity
+        matched_tags = []
+        for i in np.argsort(cosine_similarities)[::-1]:  # Sort indices in descending order
+            if cosine_similarities[i] > 0.1:  # Threshold can be adjusted
+                # Get the index in the flattened SDG keyword list
+                keyword_index = i
+                # Identify which SDG tag this keyword belongs to
+                for sdg, keywords in sdg_keywords.items():
+                    if keyword_index < len(keywords):
+                        matched_tags.append(sdg)
+                        break
+            else:
+                break  # Stop if the similarity is below the threshold
+
+        doc['sdg_tags'] = matched_tags  # Add matched SDG tags to the document
 
 def save_sparse_matrix(tfidf_matrix, cache_dir: str):
     """Save sparse matrix in a numpy-compatible format."""
@@ -60,7 +92,7 @@ def save_tfidf_components(tfidf_matrix, vectorizer: TfidfVectorizer, documents: 
     )
     logger.info(f"TF-IDF metadata saved to {tfidf_metadata_path}")
 
-    # Save document metadata
+    # Save document metadata including SDG tags
     np.savez_compressed(document_metadata_path, documents=documents)
     logger.info(f"Document metadata saved to {document_metadata_path}")
 
@@ -75,6 +107,9 @@ def precompute_cache():
     # Create the TF-IDF matrix
     tfidf_matrix, vectorizer = create_tfidf_matrix(documents)
 
+    # Get SDG tags for each document based on semantic matching
+    get_sdg_tags_for_documents(documents, sdg_keywords)
+
     # Save the generated components
     os.makedirs(cache_dir, exist_ok=True)
     save_tfidf_components(tfidf_matrix, vectorizer, documents, cache_dir)
@@ -82,3 +117,4 @@ def precompute_cache():
 
 if __name__ == "__main__":
     precompute_cache()
+    
