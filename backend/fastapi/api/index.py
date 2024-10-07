@@ -17,9 +17,10 @@ from backend.fastapi.utils.text_processing import (
 )
 from backend.fastapi.utils.logger import logger
 
-# Add imports for SDG tagging
+# Add imports for SDG tagging and caching
 from backend.fastapi.data.sdg_utils import compute_sdg_tags
 from backend.fastapi.services.sdg_manager import get_sdg_keywords
+from backend.fastapi.cache.cache_manager import load_cache, save_cache
 
 # Create a FastAPI app instance
 app = FastAPI(docs_url="/api/docs", openapi_url="/api/openapi.json")
@@ -47,7 +48,11 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 
 # File paths for data and cache
 file_path = "backend/fastapi/data/github-mauropelucchi-tedx_dataset-update_2024-details.csv"
-cache_file_path = "backend/fastapi/cache/tedx_dataset.pkl"
+data_cache_path = "backend/fastapi/cache/tedx_dataset.pkl"
+documents_cache_path = "backend/fastapi/cache/documents.pkl"
+idf_cache_path = "backend/fastapi/cache/idf_dict.pkl"
+tfidf_vectors_cache_path = "backend/fastapi/cache/document_tfidf_vectors.pkl"
+sdg_tags_cache_path = "backend/fastapi/cache/sdg_tags.pkl"
 
 # Background task to load the necessary resources
 async def load_resources():
@@ -55,34 +60,68 @@ async def load_resources():
 
     # Load TEDx Dataset
     logger.info("Loading TEDx dataset.")
-    data = load_dataset(file_path, cache_file_path)
+    data = load_dataset(file_path, data_cache_path)
     logger.info(f"TEDx dataset loaded successfully! Data: {data is not None}")
 
-    # Preprocess documents
-    documents = [preprocess(doc.get('description', '')) for doc in data]
-    logger.info("Documents preprocessed.")
+    # Check for cached preprocessed documents
+    documents = load_cache(documents_cache_path)
+    if documents is not None:
+        logger.info("Preprocessed documents loaded from cache.")
+    else:
+        # Preprocess documents
+        logger.info("Preprocessing documents.")
+        documents = [preprocess(doc.get('description', '')) for doc in data]
+        logger.info("Documents preprocessed.")
+        # Cache the preprocessed documents
+        save_cache(documents, documents_cache_path)
 
-    # Compute IDF dictionary
-    idf_dict = compute_idf(documents)
-    logger.info("IDF dictionary computed.")
+    # Check for cached IDF dictionary
+    idf_dict = load_cache(idf_cache_path)
+    if idf_dict is not None:
+        logger.info("IDF dictionary loaded from cache.")
+    else:
+        # Compute IDF dictionary
+        logger.info("Computing IDF dictionary.")
+        idf_dict = compute_idf(documents)
+        logger.info("IDF dictionary computed.")
+        # Cache the IDF dictionary
+        save_cache(idf_dict, idf_cache_path)
 
-    # Compute TF-IDF vectors for documents
-    document_tfidf_vectors = [compute_tfidf(compute_tf(doc), idf_dict) for doc in documents]
-    logger.info("Document TF-IDF vectors computed.")
+    # Check for cached TF-IDF vectors
+    document_tfidf_vectors = load_cache(tfidf_vectors_cache_path)
+    if document_tfidf_vectors is not None:
+        logger.info("Document TF-IDF vectors loaded from cache.")
+    else:
+        # Compute TF-IDF vectors for documents
+        logger.info("Computing TF-IDF vectors for documents.")
+        document_tfidf_vectors = [compute_tfidf(compute_tf(doc), idf_dict) for doc in documents]
+        logger.info("Document TF-IDF vectors computed.")
+        # Cache the TF-IDF vectors
+        save_cache(document_tfidf_vectors, tfidf_vectors_cache_path)
 
-    # Compute SDG tags
-    sdg_keywords_dict = get_sdg_keywords()
-    sdg_keywords = {sdg: [kw.lower() for kw in kws] for sdg, kws in sdg_keywords_dict.items()}
-    sdg_names = list(sdg_keywords.keys())
-    data_with_sdg_tags = []
+    # Check for cached SDG tags
+    sdg_tags = load_cache(sdg_tags_cache_path)
+    if sdg_tags is not None:
+        logger.info("SDG tags loaded from cache.")
+        # Assign SDG tags to data
+        for idx, doc in enumerate(data):
+            doc['sdg_tags'] = sdg_tags[idx]
+    else:
+        # Compute SDG tags
+        logger.info("Computing SDG tags.")
+        sdg_keywords_dict = get_sdg_keywords()
+        sdg_keywords = {sdg: [kw.lower() for kw in kws] for sdg, kws in sdg_keywords_dict.items()}
+        sdg_names = list(sdg_keywords.keys())
+        sdg_tags = []
 
-    for idx, doc_tokens in enumerate(documents):
-        sdg_tags = compute_sdg_tags([doc_tokens], sdg_keywords, sdg_names)[0]
-        data[idx]['sdg_tags'] = sdg_tags
-        data_with_sdg_tags.append(data[idx])
+        for idx, doc_tokens in enumerate(documents):
+            tags = compute_sdg_tags([doc_tokens], sdg_keywords, sdg_names)[0]
+            data[idx]['sdg_tags'] = tags
+            sdg_tags.append(tags)
 
-    data = data_with_sdg_tags
-    logger.info("SDG tags assigned to documents.")
+        # Cache the SDG tags
+        save_cache(sdg_tags, sdg_tags_cache_path)
+        logger.info("SDG tags computed and cached.")
 
     # Set the resources initialized flag and notify waiting coroutines
     resources_initialized = True
