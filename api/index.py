@@ -1,10 +1,25 @@
 # File: api/index.py
 
 from fastapi import FastAPI, Query
+from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Dict
 
-# Create a FastAPI app instance
-app = FastAPI(docs_url=None, redoc_url=None)  # Disable automatic documentation
+# Create a FastAPI app instance with documentation and OpenAPI schema disabled
+app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+
+# Configure CORS
+origins = [
+    "http://localhost:3000",  # React app running on localhost
+    # Add other origins if necessary
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,  # Allows requests from your frontend's origin
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Create a Search Endpoint for TEDx Talks
 @app.get("/api/search")
@@ -28,7 +43,6 @@ async def search(query: str = Query(..., min_length=1)) -> List[Dict]:
         }
     ]
     return result
-
 
 # # File: api/index.py
 
