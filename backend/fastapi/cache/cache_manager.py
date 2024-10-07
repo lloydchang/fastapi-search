@@ -33,7 +33,8 @@ async def load_cache(cache_file_path: str) -> Optional[Any]:
             async with aiofiles.open(cache_file_path, 'rb') as cache_file:
                 data = await cache_file.read()
                 return pickle.loads(data)
-        except Exception:
+        except Exception as e:
+            print(f"Failed to load cache from {cache_file_path}: {e}")
             return None
     else:
         return None
@@ -51,5 +52,5 @@ async def save_cache(data: Any, cache_file_path: str) -> None:
     try:
         async with aiofiles.open(cache_file_path, 'wb') as cache_file:
             await cache_file.write(pickle.dumps(data))
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"Failed to save cache to {cache_file_path}: {e}")

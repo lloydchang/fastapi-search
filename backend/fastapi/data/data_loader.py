@@ -16,7 +16,7 @@ async def load_dataset(file_path: str, cache_file_path: str) -> List[Dict]:
     Returns:
         list: Loaded dataset as a list of dictionaries.
     """
-    data = await load_cache(cache_file_path)  # `await` is valid here as load_cache is async
+    data = await load_cache(cache_file_path)
 
     if data is not None:
         return data
@@ -29,7 +29,8 @@ async def load_dataset(file_path: str, cache_file_path: str) -> List[Dict]:
                 for row in reader:
                     data.append(row)
             await save_cache(data, cache_file_path)
-        except Exception:
+        except Exception as e:
+            print(f"Failed to load dataset: {e}")
             data = []
 
     return data

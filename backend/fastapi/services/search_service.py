@@ -1,12 +1,7 @@
 # File: backend/fastapi/services/search_service.py
 
 from typing import List, Dict
-from backend.fastapi.utils.text_processing import (
-    preprocess,
-    compute_tf,
-    compute_tfidf,
-    cosine_similarity,
-)
+from backend.fastapi.utils.text_processing import preprocess, compute_tf, compute_tfidf, cosine_similarity
 
 number_of_results = 1  # Set to return only 1 result
 
