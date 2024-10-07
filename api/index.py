@@ -14,6 +14,7 @@ from functools import lru_cache
 from rapidfuzz import process, fuzz  # Ensure rapidfuzz is installed if using spell-checking
 
 from backend.fastapi.services.search_service import semantic_search
+from backend.fastapi.cache.cache_manager_read import load_cache
 
 # Initialize FastAPI app
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
@@ -32,15 +33,14 @@ app.add_middleware(
 )
 
 # Resolve cache directory path
-base_dir = Path(__file__).resolve().parent.parent  # api/index.py -> api/ -> backend/fastapi
+base_dir = Path(__file__).resolve().parent.parent
 cache_dir = base_dir / "backend" / "fastapi" / "cache"
 cache_dir = str(cache_dir)
+# print(cache_dir)
 
 # Load vocabulary for spell-checking
-from backend.fastapi.cache.cache_manager import load_cache
-
 def load_vocabulary(cache_dir: str) -> Dict[str, int]:
-    tfidf_metadata_path = os.path.join(cache_dir, 'tfidf_metadata.npz')
+    tfidf_metadata_path = os.path.join(cache_dir, 'tfidf_metadata.npz')  # Ensure correct filename
     metadata = load_cache(tfidf_metadata_path)
     if metadata is None or 'vocabulary' not in metadata:
         raise RuntimeError("TF-IDF metadata not found or corrupted.")

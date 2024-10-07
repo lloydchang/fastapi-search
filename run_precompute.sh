@@ -4,6 +4,8 @@
 
 set -e
 
+cd $(dirname $0)
+
 BASE_DIR=$(pwd)
 
 echo 'Starting precompute process...'
@@ -25,14 +27,19 @@ else
 fi
 
 # Install precompute requirements
-echo 'Installing precompute requirements...'
-pip install --upgrade pip
-pip install -r requirements_precompute.txt
+if [ -f "requirements_precompute.txt" ]; then
+    echo 'Installing precompute requirements...'
+    pip install --upgrade pip
+    pip install -r requirements_precompute.txt
+else
+    echo 'requirements_precompute.txt not found. Please ensure it exists.'
+    exit 1
+fi
 
 # Set PYTHONPATH
 export PYTHONPATH="$BASE_DIR:$PYTHONPATH"
 
-# Run the precompute_cache.py script
+# Run the precompute_cache.py. script
 echo 'Running precompute script...'
 python backend/fastapi/utils/precompute_cache.py
 

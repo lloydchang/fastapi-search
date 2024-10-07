@@ -8,9 +8,13 @@ BASE_DIR=$(pwd)
 
 echo 'Starting FastAPI server...'
 
-# Activate virtual environment if it exists
+# Activate virtual environment or create one
 if [ -d "venv" ]; then
-    echo 'Activating virtual environment...'
+    echo 'Activating existing virtual environment...'
+    source venv/bin/activate
+else
+    echo 'Creating virtual environment...'
+    python -m venv venv
     source venv/bin/activate
 fi
 
