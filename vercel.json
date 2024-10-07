@@ -1,13 +1,8 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "backend/fastapi/api/index.py",
-      "use": "@vercel/python"
-    }
-  ],
   "functions": {
-    "backend/fastapi/api/index.py": {
+    "api/index.py": {
+      "runtime": "python",
       "maxDuration": 30,
       "memory": 1024
     }
@@ -15,7 +10,7 @@
   "routes": [
     {
       "src": "/(.*)",
-      "dest": "backend/fastapi/api/index.py"
+      "dest": "/api/index.py"
     }
   ]
 }
