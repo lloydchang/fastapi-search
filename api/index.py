@@ -24,25 +24,42 @@ base_dir = Path(__file__).resolve().parent.parent
 cache_dir = str(base_dir / "backend" / "fastapi" / "cache")
 
 def load_vocabulary(cache_dir: str) -> Dict[str, int]:
+    """Load vocabulary metadata from the precomputed TF-IDF cache."""
     tfidf_metadata_path = os.path.join(cache_dir, 'tfidf_metadata.npz')
     metadata = load_cache(tfidf_metadata_path)
     if metadata is None or 'vocabulary' not in metadata:
         raise RuntimeError("TF-IDF metadata not found or corrupted.")
     return metadata['vocabulary'].item()
 
+# Load vocabulary on startup
 vocabulary = load_vocabulary(cache_dir)
 
 @lru_cache(maxsize=1024)
 def get_cached_results(query: str) -> List[Dict]:
+    """Fetch cached search results for the given query."""
     return semantic_search(query, cache_dir, top_n=5)
 
 @app.get("/api/search")
 def search(request: Request, query: str = Query(..., min_length=1, max_length=100)) -> Dict:
+    """Handle the search endpoint."""
     request_uuid = uuid.uuid4()
+    search_request_start_time = time.time()
+    print(f"{request_uuid} [Search Endpoint Handling] Starting search request processing for query: '{query}'...")
+
     try:
+        # Retrieve cached results or perform a new search
         results = get_cached_results(query)
         if not results or all(result.get('similarity', 0) == 0 for result in results):
             return JSONResponse(status_code=200, content={"message": "No results found."})
-    except Exception:
+
+    except RuntimeError as e:
+        print(f"{request_uuid} [Cache Error] {e}")
+        raise HTTPException(status_code=503, detail="Precomputed data initialization failed.")
+    except Exception as e:
+        print(f"{request_uuid} [Semantic Search Error] Failed to process query '{query}': {e}.")
         raise HTTPException(status_code=500, detail="Semantic search failed.")
+
+    search_request_end_time = time.time()
+    print(f"{request_uuid} [Search Endpoint Handling] Search request handled in {search_request_end_time - search_request_start_time:.4f} seconds.")
+
     return {"results": results}
