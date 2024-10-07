@@ -16,7 +16,7 @@ async def load_dataset(file_path: str, cache_file_path: str) -> List[Dict]:
     Returns:
         list: Loaded dataset as a list of dictionaries.
     """
-    data = await load_cache(cache_file_path)
+    data = await load_cache(cache_file_path)  # `await` is valid here as load_cache is async
 
     if data is not None:
         return data

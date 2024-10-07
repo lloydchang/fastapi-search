@@ -25,7 +25,7 @@ app = FastAPI(docs_url="/api/docs", openapi_url="/api/openapi.json")
 # Enable CORS middleware to handle cross-origin requests
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Adjust origins as needed
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -55,7 +55,7 @@ sdg_tags_cache_path = "backend/fastapi/cache/sdg_tags.pkl"
 async def load_resources():
     global data, idf_dict, document_tfidf_vectors, resources_initialized
 
-    data = await load_dataset(file_path, data_cache_path)
+    data = await load_dataset(file_path, data_cache_path)  # This line should work now
 
     documents = await load_cache(documents_cache_path)
     if documents is None:
