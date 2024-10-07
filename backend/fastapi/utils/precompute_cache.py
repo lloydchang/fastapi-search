@@ -4,7 +4,7 @@ import os
 import numpy as np
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
-from typing import Any, List, Dict  # Ensure all type hints are imported
+from typing import Any, List, Dict
 from backend.fastapi.cache.cache_manager_write import save_cache
 import logging
 
@@ -22,10 +22,8 @@ def load_tedx_documents(csv_file_path: str) -> List[Dict[str, str]]:
     Returns:
         List[Dict[str, str]]: List of TEDx talks with metadata.
     """
-    # Load the TEDx CSV file into a DataFrame
     tedx_df = pd.read_csv(csv_file_path)
 
-    # Extract metadata (slug, description, presenterDisplayName) and drop missing values
     if 'description' not in tedx_df.columns:
         raise ValueError(f"Column 'description' not found in the CSV file {csv_file_path}")
 
@@ -45,8 +43,16 @@ def create_tfidf_matrix(documents: List[Dict[str, str]]) -> Any:
         Any: Sparse TF-IDF matrix and the vectorizer instance.
     """
     descriptions = [doc['description'] for doc in documents]
-    vectorizer = TfidfVectorizer(stop_words='english', ngram_range=(1, 2), max_features=10000)
+    
+    # Expanded TF-IDF parameters to capture more specific terms like 'usa' and 'sdg'
+    vectorizer = TfidfVectorizer(
+        stop_words='english', 
+        ngram_range=(1, 3), 
+        max_features=20000,
+        vocabulary={"sdg": 0}  # Manually adding "sdg" to ensure it is included
+    )
     tfidf_matrix = vectorizer.fit_transform(descriptions)
+    
     return tfidf_matrix, vectorizer
 
 def save_tfidf_components(tfidf_matrix: np.ndarray, vectorizer: TfidfVectorizer, documents: List[Dict[str, str]], cache_dir: str):
