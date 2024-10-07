@@ -1,10 +1,11 @@
 # File: backend/fastapi/data/data_loader.py
 
 import csv
-from backend.fastapi.utils.logger import logger
+import aiofiles
+from typing import List, Dict
 from backend.fastapi.cache.cache_manager import load_cache, save_cache
 
-def load_dataset(file_path: str, cache_file_path: str) -> list:
+async def load_dataset(file_path: str, cache_file_path: str) -> List[Dict]:
     """
     Loads the TEDx dataset with caching.
 
@@ -15,24 +16,20 @@ def load_dataset(file_path: str, cache_file_path: str) -> list:
     Returns:
         list: Loaded dataset as a list of dictionaries.
     """
-    logger.info("Loading the TEDx Dataset with a caching mechanism.")
-    data = load_cache(cache_file_path)
+    data = await load_cache(cache_file_path)
 
     if data is not None:
-        logger.info("Dataset loaded from cache.")
+        return data
     else:
-        logger.info("Loading dataset from CSV file.")
         try:
             data = []
-            with open(file_path, newline='', encoding='utf-8') as csvfile:
-                reader = csv.DictReader(csvfile)
+            async with aiofiles.open(file_path, mode='r', encoding='utf-8') as csvfile:
+                content = await csvfile.read()
+                reader = csv.DictReader(content.splitlines())
                 for row in reader:
                     data.append(row)
-            logger.info(f"Dataset successfully loaded with {len(data)} records.")
-            # Cache the dataset for future use
-            save_cache(data, cache_file_path)
-        except Exception as e:
-            logger.error(f"Error loading dataset: {e}")
+            await save_cache(data, cache_file_path)
+        except Exception:
             data = []
 
     return data

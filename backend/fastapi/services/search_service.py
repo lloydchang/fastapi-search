@@ -1,7 +1,6 @@
 # File: backend/fastapi/services/search_service.py
 
 from typing import List, Dict
-from backend.fastapi.utils.logger import logger
 from backend.fastapi.utils.text_processing import (
     preprocess,
     compute_tf,
@@ -9,9 +8,9 @@ from backend.fastapi.utils.text_processing import (
     cosine_similarity,
 )
 
-number_of_results = 100
+number_of_results = 1  # Set to return only 1 result
 
-def semantic_search(query: str, data: list, idf_dict, document_tfidf_vectors, top_n: int = number_of_results) -> List[Dict]:
+async def semantic_search(query: str, data: list, idf_dict, document_tfidf_vectors, top_n: int = number_of_results) -> List[Dict]:
     """
     Performs semantic search on the TEDx dataset using custom TF-IDF vectors.
 
@@ -25,8 +24,6 @@ def semantic_search(query: str, data: list, idf_dict, document_tfidf_vectors, to
     Returns:
         List[Dict]: List of search results with metadata.
     """
-    logger.info(f"Performing semantic search for the query: '{query}'.")
-
     try:
         query_tokens = preprocess(query)
         query_tf = compute_tf(query_tokens)
@@ -37,16 +34,14 @@ def semantic_search(query: str, data: list, idf_dict, document_tfidf_vectors, to
             sim = cosine_similarity(query_tfidf, doc_tfidf)
             similarities.append((idx, sim))
 
-        # Sort by similarity
+        # Sort by similarity and get top 1 result
         similarities.sort(key=lambda x: x[1], reverse=True)
         top_indices = [idx for idx, _ in similarities[:top_n]]
-        logger.info(f"Top {top_n} indices identified.")
 
-        # Prepare the search results
+        # Prepare the single top search result
         results = []
         for idx in top_indices:
             doc = data[idx]
-            # Check if 'sdg_tags' is present, otherwise use an empty list as a placeholder
             sdg_tags = doc.get('sdg_tags', [])
 
             result = {
@@ -59,9 +54,7 @@ def semantic_search(query: str, data: list, idf_dict, document_tfidf_vectors, to
             }
             results.append(result)
 
-        logger.info(f"Semantic search completed successfully for query: '{query}'. Found {len(results)} results.")
         return results
 
     except Exception as e:
-        logger.error(f"Search error: {str(e)}")
         return [{"error": f"Search error: {str(e)}"}]
