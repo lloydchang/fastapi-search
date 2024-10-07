@@ -1,128 +1,139 @@
 # File: api/index.py
 
-from fastapi import FastAPI, Query
-from fastapi.middleware.cors import CORSMiddleware
+import time
+import uuid
+from threading import Lock
+from pathlib import Path
 from typing import List, Dict
 
-# Create a FastAPI app instance with documentation and OpenAPI schema disabled
-app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+from fastapi import FastAPI, Query, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 
-# Configure CORS
+from backend.fastapi.services.search_service import semantic_search
+
+from joblib import load
+import json
+
+# Generate a script-wide unique ID for general sections
+script_uuid = uuid.uuid4()
+
+# Measure the overall script execution time
+print(f"{script_uuid} [Script Initialization] Starting script initialization...")
+script_initialization_start = time.time()
+
+# 1. Creating the FastAPI App Instance
+print(f"{script_uuid} [App Initialization] Starting FastAPI app creation...")
+app_start_time = time.time()
+app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+app_end_time = time.time()
+print(f"{script_uuid} [App Initialization] FastAPI app instance created in {app_end_time - app_start_time:.4f} seconds.")
+
+# 2. Setting Up CORS Configuration
+print(f"{script_uuid} [CORS Setup] Starting CORS configuration...")
+cors_start_time = time.time()
 origins = [
     "http://localhost:3000",  # React app running on localhost
-    # Add other origins if necessary
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,  # Allows requests from your frontend's origin
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+cors_end_time = time.time()
+print(f"{script_uuid} [CORS Setup] CORS configuration completed in {cors_end_time - cors_start_time:.4f} seconds.")
 
-# Create a Search Endpoint for TEDx Talks
+# 3. Resolving File Paths
+print(f"{script_uuid} [Path Resolution] Starting file path resolution...")
+path_resolution_start_time = time.time()
+base_dir = Path(__file__).resolve().parent.parent
+cache_dir = base_dir / "backend" / "fastapi" / "cache"
+path_resolution_end_time = time.time()
+print(f"{script_uuid} [Path Resolution] File paths resolved in {path_resolution_end_time - path_resolution_start_time:.4f} seconds.")
+
+# Global variables to hold the loaded resources
+tfidf_vectorizer = None
+tfidf_matrix = None
+data = None
+resources_initialized = False
+load_lock = Lock()
+
+# 4. Loading Resources
+print(f"{script_uuid} [Resource Loading] Starting resource loading...")
+
+def load_resources(log_uuid):
+    global tfidf_vectorizer, tfidf_matrix, data, resources_initialized
+
+    with load_lock:
+        if resources_initialized:
+            return
+
+        print(f"{log_uuid} [Resource Loading] Starting to load precomputed data...")
+        load_start_time = time.time()
+        try:
+            # Load tfidf_matrix and tfidf_vectorizer
+            tfidf_matrix = load(cache_dir / 'tfidf_matrix.joblib')
+            tfidf_vectorizer = load(cache_dir / 'tfidf_vectorizer.joblib')
+
+            # Load data (the documents)
+            with open(cache_dir / 'data.json', 'r', encoding='utf-8') as f:
+                data = json.load(f)
+
+            resources_initialized = True
+            load_end_time = time.time()
+            print(f"{log_uuid} [Resource Loading] Loaded precomputed data in {load_end_time - load_start_time:.4f} seconds.")
+        except FileNotFoundError as e:
+            print(f"{log_uuid} [Resource Loading Error] {e}")
+            raise RuntimeError("Failed to load precomputed data due to missing file.")
+        except Exception as e:
+            print(f"{log_uuid} [Resource Loading Error] Unexpected error: {e}.")
+            raise RuntimeError("Failed to load precomputed data due to an unexpected error.")
+
+# 5. Creating Search Endpoint
+print(f"{script_uuid} [Endpoint Creation] Starting Search Endpoint creation...")
+endpoint_creation_start_time = time.time()
+
 @app.get("/api/search")
-async def search(query: str = Query(..., min_length=1)) -> List[Dict]:
-    # Return the specific result provided
-    result = [
-        {
-            "title": "esther ndichu hunger isn t a food issue it s a logistics issue",
-            "description": (
-                "Most people presume that world hunger is caused by a lack of food. "
-                "But Esther Ndichu, Humanitarian Supply Chain Director at UPS, argues "
-                "that the real issue is logistics. She points out that farmers often "
-                "struggle to get goods to market and that food often rots just miles "
-                "from the neediest people. She explains that by fixing \"the last mile\" "
-                "hunger can be solved in our lifetime."
-            ),
-            "presenter": "Esther Ndichu",
-            "sdg_tags": ["sdg2"],
-            "similarity_score": 0.0,
-            "url": "https://www.ted.com/talks/esther_ndichu_hunger_isn_t_a_food_issue_it_s_a_logistics_issue"
-        }
-    ]
+def search(request: Request, query: str = Query(..., min_length=1)) -> List[Dict]:
+    # Generate a unique ID for each request
+    request_uuid = uuid.uuid4()
+    print(f"{request_uuid} [Search Endpoint Handling] Starting search request processing for query: '{query}'...")
+
+    search_request_start_time = time.time()
+
+    if not resources_initialized:
+        print(f"{request_uuid} [Resource Initialization] Starting resource initialization before search...")
+        resource_init_start_time = time.time()
+        try:
+            load_resources(request_uuid)  # Pass request-specific UUID to load_resources()
+        except RuntimeError as e:
+            print(f"{request_uuid} [Resource Initialization Error] Failed to initialize resources: {e}.")
+            raise HTTPException(status_code=503, detail="Precomputed data initialization failed.")
+        resource_init_end_time = time.time()
+        print(f"{request_uuid} [Resource Initialization] Resources initialized in {resource_init_end_time - resource_init_start_time:.4f} seconds.")
+
+    if tfidf_vectorizer is None or tfidf_matrix is None or data is None:
+        print(f"{request_uuid} [Search Endpoint Error] Precomputed data is not available.")
+        raise HTTPException(
+            status_code=503, detail="Precomputed data not available."
+        )
+
+    print(f"{request_uuid} [Semantic Search] Starting semantic search processing...")
+    semantic_search_start_time = time.time()
+    try:
+        result = semantic_search(query, tfidf_vectorizer, tfidf_matrix, data)
+    except Exception as e:
+        print(f"{request_uuid} [Semantic Search Error] Failed to process query '{query}': {e}.")
+        raise HTTPException(status_code=500, detail="Semantic search failed.")
+    semantic_search_end_time = time.time()
+    print(f"{request_uuid} [Semantic Search] Semantic search completed in {semantic_search_end_time - semantic_search_start_time:.4f} seconds.")
+
+    search_request_end_time = time.time()
+    print(f"{request_uuid} [Search Endpoint Handling] Search request handled in {search_request_end_time - search_request_start_time:.4f} seconds.")
+
     return result
 
-# # File: api/index.py
-
-# import asyncio
-# import warnings
-# import subprocess
-# from pathlib import Path
-# from typing import List, Dict
-
-# from fastapi import FastAPI, Query, HTTPException
-# from fastapi.middleware.cors import CORSMiddleware
-
-# from backend.fastapi.data.data_loader import load_dataset
-# from backend.fastapi.services.search_service import semantic_search
-# from backend.fastapi.utils.text_processing import preprocess, compute_tf, compute_idf, compute_tfidf
-# from backend.fastapi.cache.cache_manager import load_cache
-
-# # Create a FastAPI app instance
-# app = FastAPI(docs_url="/api/docs", openapi_url="/api/openapi.json")
-
-# # Global variables to hold the loaded resources
-# data = None
-# idf_dict = None
-# document_tfidf_vectors = None
-# resources_initialized = False
-
-# # Event to wait for resource initialization
-# resource_event = asyncio.Event()
-
-# # File paths for data and cache, relative to the base directory
-# file_path = Path("backend/fastapi/data/github-mauropelucchi-tedx_dataset-update_2024-details.csv")
-# cache_directory = Path("backend/fastapi/cache")
-# cache_file_path = cache_directory / "tedx_dataset_with_sdg_tags.pkl"
-
-# # Function to load resources from cache or run the precompute script
-# async def load_resources():
-#     global data, idf_dict, document_tfidf_vectors, resources_initialized
-
-#     # Check for cache file existence
-#     if not cache_file_path.exists():
-#         print(f"Cache file '{cache_file_path}' not found. Running precompute_cache.py script...")
-
-#         # Run the precompute script from the base directory
-#         precompute_script_path = Path("backend/fastapi/utils/precompute_cache.py")
-#         try:
-#             # Use absolute path for subprocess and run from base directory
-#             subprocess.run(
-#                 ["python3", str(precompute_script_path)],
-#                 check=True,
-#                 cwd=str(Path(__file__).resolve().parent.parent),  # Run from base directory
-#             )
-#         except subprocess.CalledProcessError as e:
-#             raise RuntimeError(f"Precomputation script failed: {e}")
-
-#     # Load the cache file
-#     print("Loading resources from the single cache file...")
-#     cache_data = await load_cache(str(cache_file_path))
-#     if cache_data is None:
-#         raise RuntimeError("Failed to load cache file even after precomputation.")
-
-#     # Unpack the cache data
-#     data, idf_dict, document_tfidf_vectors = cache_data["data"], cache_data["idf_dict"], cache_data["document_tfidf_vectors"]
-
-#     resources_initialized = True
-#     resource_event.set()
-
-# # On startup, load resources in a background task
-# @app.on_event("startup")
-# async def startup_event():
-#     asyncio.create_task(load_resources())
-
-# # Create a Search Endpoint for TEDx Talks
-# @app.get("/api/search")
-# async def search(query: str = Query(..., min_length=1)) -> List[Dict]:
-#     await resource_event.wait()
-
-#     if data is None or idf_dict is None or document_tfidf_vectors is None:
-#         raise HTTPException(
-#             status_code=503, detail="Data or TF-IDF vectors not available. Run `precompute_cache.py`."
-#         )
-
-#     result = await semantic_search(query, data, idf_dict, document_tfidf_vectors)
-#     return result
+endpoint_creation_end_time = time.time()
+print(f"{script_uuid} [Endpoint Creation] Search Endpoint created in {endpoint_creation_end_time - endpoint_creation_start_time:.4f} seconds.")

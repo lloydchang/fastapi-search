@@ -1,3 +1,6 @@
+# File: requirements.txt
+
 fastapi
 uvicorn
 aiofiles
+msgpack

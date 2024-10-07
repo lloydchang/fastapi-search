@@ -2,7 +2,7 @@
 
 import math
 import re
-from collections import Counter, defaultdict
+from collections import Counter
 
 def preprocess(text):
     text = text.lower()
@@ -20,8 +20,8 @@ def compute_tf(tokens):
 def compute_idf(documents):
     N = len(documents)
     idf_dict = {}
-    all_tokens_set = set(token for doc in documents for token in doc)
-    for term in all_tokens_set:
+    all_terms = set(term for doc in documents for term in doc)
+    for term in all_terms:
         containing_docs = sum(1 for doc in documents if term in doc)
         idf_dict[term] = math.log(N / (1 + containing_docs))
     return idf_dict
@@ -33,7 +33,9 @@ def compute_tfidf(tf_dict, idf_dict):
     return tfidf
 
 def cosine_similarity(vec1, vec2):
+    # Compute dot product
     dot_product = sum(vec1.get(term, 0.0) * vec2.get(term, 0.0) for term in set(vec1.keys()).union(vec2.keys()))
+    # Compute magnitudes
     magnitude1 = math.sqrt(sum(value**2 for value in vec1.values()))
     magnitude2 = math.sqrt(sum(value**2 for value in vec2.values()))
     if magnitude1 == 0 or magnitude2 == 0:

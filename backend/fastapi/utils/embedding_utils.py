@@ -2,36 +2,17 @@
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-def encode_descriptions(descriptions):
+def compute_tfidf_matrix(documents):
     """
-    Encodes a list of descriptions using TF-IDF vectorizer.
+    Computes the TF-IDF matrix for the provided documents.
 
     Args:
-        descriptions (List[str]): List of TEDx talk descriptions.
+        documents (List[str]): List of documents as strings.
 
     Returns:
-        TfidfVectorizer, sparse matrix: The vectorizer and the TF-IDF matrix.
+        TfidfVectorizer: The fitted TF-IDF vectorizer.
+        csr_matrix: The TF-IDF matrix.
     """
-    try:
-        vectorizer = TfidfVectorizer()
-        tfidf_matrix = vectorizer.fit_transform(descriptions)
-        return vectorizer, tfidf_matrix
-    except Exception as e:
-        return None, None
-
-def encode_sdg_keywords(sdg_keyword_list, vectorizer):
-    """
-    Encodes a list of SDG keywords using the provided TF-IDF vectorizer.
-
-    Args:
-        sdg_keyword_list (List[str]): List of SDG keyword strings.
-        vectorizer (TfidfVectorizer): The TF-IDF vectorizer trained on the descriptions.
-
-    Returns:
-        sparse matrix: The TF-IDF matrix for SDG keywords.
-    """
-    try:
-        sdg_tfidf_matrix = vectorizer.transform(sdg_keyword_list)
-        return sdg_tfidf_matrix
-    except Exception:
-        return None
+    vectorizer = TfidfVectorizer()
+    tfidf_matrix = vectorizer.fit_transform(documents)
+    return vectorizer, tfidf_matrix

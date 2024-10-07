@@ -1,50 +1,44 @@
 # File: backend/fastapi/services/search_service.py
 
 from typing import List, Dict
-from backend.fastapi.utils.text_processing import preprocess, compute_tf, compute_tfidf, cosine_similarity
+from sklearn.metrics.pairwise import cosine_similarity
 
 number_of_results = 1  # Set to return only 1 result
 
-async def semantic_search(query: str, data: list, idf_dict, document_tfidf_vectors, top_n: int = number_of_results) -> List[Dict]:
+def semantic_search(query: str, tfidf_vectorizer, tfidf_matrix, data: list, top_n: int = number_of_results) -> List[Dict]:
     """
-    Performs semantic search on the TEDx dataset using custom TF-IDF vectors.
+    Performs semantic search on the TEDx dataset using precomputed TF-IDF vectors.
 
     Args:
         query (str): The search query.
-        data (list): The dataset containing TEDx talks.
-        idf_dict: The IDF dictionary.
-        document_tfidf_vectors: Precomputed TF-IDF vectors for the documents.
+        tfidf_vectorizer: The preloaded TF-IDF vectorizer.
+        tfidf_matrix: The preloaded TF-IDF matrix.
+        data (list): The preloaded data containing documents and their metadata.
         top_n (int): Number of top results to return.
 
     Returns:
         List[Dict]: List of search results with metadata.
     """
     try:
-        query_tokens = preprocess(query)
-        query_tf = compute_tf(query_tokens)
-        query_tfidf = compute_tfidf(query_tf, idf_dict)
+        # Transform the query using the loaded vectorizer
+        query_vector = tfidf_vectorizer.transform([query])
 
-        similarities = []
-        for idx, doc_tfidf in enumerate(document_tfidf_vectors):
-            sim = cosine_similarity(query_tfidf, doc_tfidf)
-            similarities.append((idx, sim))
+        # Compute cosine similarities using vectorized operations
+        cosine_similarities = cosine_similarity(query_vector, tfidf_matrix).flatten()
 
-        # Sort by similarity and get top 1 result
-        similarities.sort(key=lambda x: x[1], reverse=True)
-        top_indices = [idx for idx, _ in similarities[:top_n]]
+        # Get the indices of the top N similar documents
+        top_indices = cosine_similarities.argsort()[-top_n:][::-1]
 
-        # Prepare the single top search result
+        # Prepare the search results
         results = []
         for idx in top_indices:
             doc = data[idx]
-            sdg_tags = doc.get('sdg_tags', [])
-
             result = {
                 'title': doc.get('slug', '').replace('_', ' '),
                 'description': doc.get('description', ''),
-                'presenter': doc.get('presenterDisplayName', ''),
-                'sdg_tags': sdg_tags,
-                'similarity_score': float(similarities[idx][1]),
+                'presenter': doc.get('presenter', ''),
+                'sdg_tags': doc.get('sdg_tags', []),
+                'similarity_score': float(cosine_similarities[idx]),
                 'url': f"https://www.ted.com/talks/{doc.get('slug', '')}"
             }
             results.append(result)

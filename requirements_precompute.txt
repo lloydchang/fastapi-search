@@ -1,0 +1,5 @@
+# File: requirements_precompute.txt
+
+numpy
+scikit-learn
+msgpack
