@@ -16,7 +16,10 @@ from backend.fastapi.cache.cache_manager_read import load_cache
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
 # Configure CORS
-origins = ["http://localhost:3000"]
+origins = [
+    "http://localhost:3000",  # Local frontend
+    "https://nextjs-fastapi-wheat-kappa.vercel.app"  # Deployed frontend URL
+]
 app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 # Resolve cache directory path
