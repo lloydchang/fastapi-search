@@ -1,12 +1,8 @@
 # File: api/index.py
 
 import asyncio
-import warnings
-import os
 from typing import List, Dict
-
 from fastapi import FastAPI, Query, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
 
 from backend.fastapi.data.data_loader import load_dataset
 from backend.fastapi.services.search_service import semantic_search
