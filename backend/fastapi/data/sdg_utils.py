@@ -1,13 +1,15 @@
 # File: backend/fastapi/data/sdg_utils.py
 
-def compute_sdg_tags(documents, sdg_keywords, sdg_names):
+from typing import List, Dict
+
+def compute_sdg_tags(documents: List[List[str]], sdg_keywords: Dict[str, List[str]], sdg_names: List[str]) -> List[List[str]]:
     """
     Compute SDG tags for each document based on keyword presence.
 
     Args:
-        documents: List of tokenized documents.
-        sdg_keywords: Dictionary of SDG keywords.
-        sdg_names: List of SDG names.
+        documents (List[List[str]]): List of tokenized documents.
+        sdg_keywords (Dict[str, List[str]]): Dictionary of SDG keywords.
+        sdg_names (List[str]): List of SDG names.
 
     Returns:
         List[List[str]]: List of lists containing SDG tags for each document.

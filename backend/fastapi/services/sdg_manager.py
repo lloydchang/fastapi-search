@@ -12,5 +12,6 @@ def get_sdg_keywords() -> Dict[str, List[str]]:
     try:
         from backend.fastapi.data.sdg_keywords import sdg_keywords
         return sdg_keywords
-    except Exception:
+    except Exception as e:
+        print(f"Error loading SDG keywords: {e}")
         return {}

@@ -2,7 +2,7 @@
 
 import time
 import uuid
-from threading import Lock
+import os
 from pathlib import Path
 from typing import List, Dict
 
@@ -10,9 +10,6 @@ from fastapi import FastAPI, Query, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.fastapi.services.search_service import semantic_search
-
-from joblib import load
-import json
 
 # Generate a script-wide unique ID for general sections
 script_uuid = uuid.uuid4()
@@ -48,50 +45,15 @@ print(f"{script_uuid} [CORS Setup] CORS configuration completed in {cors_end_tim
 # 3. Resolving File Paths
 print(f"{script_uuid} [Path Resolution] Starting file path resolution...")
 path_resolution_start_time = time.time()
-base_dir = Path(__file__).resolve().parent.parent
+base_dir = Path(__file__).resolve().parent.parent  # api/index.py -> api/ -> backend/fastapi
 cache_dir = base_dir / "backend" / "fastapi" / "cache"
+print(f"{script_uuid} [Path Resolution] Cache directory set to: {cache_dir}")
 path_resolution_end_time = time.time()
 print(f"{script_uuid} [Path Resolution] File paths resolved in {path_resolution_end_time - path_resolution_start_time:.4f} seconds.")
 
-# Global variables to hold the loaded resources
-tfidf_vectorizer = None
-tfidf_matrix = None
-data = None
-resources_initialized = False
-load_lock = Lock()
+# Global variables to hold the loaded resources are now managed within search_service.py
 
-# 4. Loading Resources
-print(f"{script_uuid} [Resource Loading] Starting resource loading...")
-
-def load_resources(log_uuid):
-    global tfidf_vectorizer, tfidf_matrix, data, resources_initialized
-
-    with load_lock:
-        if resources_initialized:
-            return
-
-        print(f"{log_uuid} [Resource Loading] Starting to load precomputed data...")
-        load_start_time = time.time()
-        try:
-            # Load tfidf_matrix and tfidf_vectorizer
-            tfidf_matrix = load(cache_dir / 'tfidf_matrix.joblib')
-            tfidf_vectorizer = load(cache_dir / 'tfidf_vectorizer.joblib')
-
-            # Load data (the documents)
-            with open(cache_dir / 'data.json', 'r', encoding='utf-8') as f:
-                data = json.load(f)
-
-            resources_initialized = True
-            load_end_time = time.time()
-            print(f"{log_uuid} [Resource Loading] Loaded precomputed data in {load_end_time - load_start_time:.4f} seconds.")
-        except FileNotFoundError as e:
-            print(f"{log_uuid} [Resource Loading Error] {e}")
-            raise RuntimeError("Failed to load precomputed data due to missing file.")
-        except Exception as e:
-            print(f"{log_uuid} [Resource Loading Error] Unexpected error: {e}.")
-            raise RuntimeError("Failed to load precomputed data due to an unexpected error.")
-
-# 5. Creating Search Endpoint
+# 4. Creating Search Endpoint
 print(f"{script_uuid} [Endpoint Creation] Starting Search Endpoint creation...")
 endpoint_creation_start_time = time.time()
 
@@ -103,37 +65,23 @@ def search(request: Request, query: str = Query(..., min_length=1)) -> List[Dict
 
     search_request_start_time = time.time()
 
-    if not resources_initialized:
-        print(f"{request_uuid} [Resource Initialization] Starting resource initialization before search...")
-        resource_init_start_time = time.time()
-        try:
-            load_resources(request_uuid)  # Pass request-specific UUID to load_resources()
-        except RuntimeError as e:
-            print(f"{request_uuid} [Resource Initialization Error] Failed to initialize resources: {e}.")
-            raise HTTPException(status_code=503, detail="Precomputed data initialization failed.")
-        resource_init_end_time = time.time()
-        print(f"{request_uuid} [Resource Initialization] Resources initialized in {resource_init_end_time - resource_init_start_time:.4f} seconds.")
-
-    if tfidf_vectorizer is None or tfidf_matrix is None or data is None:
-        print(f"{request_uuid} [Search Endpoint Error] Precomputed data is not available.")
-        raise HTTPException(
-            status_code=503, detail="Precomputed data not available."
-        )
-
-    print(f"{request_uuid} [Semantic Search] Starting semantic search processing...")
-    semantic_search_start_time = time.time()
     try:
-        result = semantic_search(query, tfidf_vectorizer, tfidf_matrix, data)
+        # Perform semantic search
+        results = semantic_search(query, str(cache_dir), top_n=1)
+    except RuntimeError as e:
+        print(f"{request_uuid} [Resource Initialization Error] {e}")
+        raise HTTPException(status_code=503, detail="Precomputed data initialization failed.")
     except Exception as e:
         print(f"{request_uuid} [Semantic Search Error] Failed to process query '{query}': {e}.")
         raise HTTPException(status_code=500, detail="Semantic search failed.")
-    semantic_search_end_time = time.time()
-    print(f"{request_uuid} [Semantic Search] Semantic search completed in {semantic_search_end_time - semantic_search_start_time:.4f} seconds.")
 
     search_request_end_time = time.time()
     print(f"{request_uuid} [Search Endpoint Handling] Search request handled in {search_request_end_time - search_request_start_time:.4f} seconds.")
 
-    return result
+    return results
 
 endpoint_creation_end_time = time.time()
 print(f"{script_uuid} [Endpoint Creation] Search Endpoint created in {endpoint_creation_end_time - endpoint_creation_start_time:.4f} seconds.")
+
+script_initialization_end = time.time()
+print(f"{script_uuid} [Script Initialization] Script initialized in {script_initialization_end - script_initialization_start:.4f} seconds.")

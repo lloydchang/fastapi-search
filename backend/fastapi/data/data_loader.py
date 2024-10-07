@@ -11,7 +11,7 @@ def load_dataset(file_path: str) -> List[Dict]:
         file_path (str): Path to the CSV file.
 
     Returns:
-        list: Loaded dataset as a list of dictionaries.
+        List[Dict]: Loaded dataset as a list of dictionaries.
     """
     try:
         data = []
