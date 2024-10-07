@@ -1,18 +1,40 @@
 # File: backend/fastapi/services/search_service.py
 
 from typing import List, Dict
-from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
+from backend.fastapi.utils.text_processing import preprocess, compute_tf, compute_idf, compute_tfidf, cosine_similarity
 
-number_of_results = 1  # Set to return only 1 result
+# Load the precomputed IDF values (saved during the precompute phase)
+# Replace with a path to your IDF values or use the ones you computed earlier
+precomputed_idf = {}  # Assuming this is populated from a saved file or precomputed during cache initialization
 
-def semantic_search(query: str, tfidf_vectorizer, tfidf_matrix, data: list, top_n: int = number_of_results) -> List[Dict]:
+def compute_query_vector(query: str, idf_dict: Dict[str, float]) -> Dict[str, float]:
     """
-    Performs semantic search on the TEDx dataset using precomputed TF-IDF vectors.
+    Computes the TF-IDF vector for a query string.
 
     Args:
         query (str): The search query.
-        tfidf_vectorizer: The preloaded TF-IDF vectorizer.
-        tfidf_matrix: The preloaded TF-IDF matrix.
+        idf_dict (Dict[str, float]): Precomputed IDF values.
+
+    Returns:
+        Dict[str, float]: The TF-IDF vector representation of the query.
+    """
+    # Preprocess the query to get tokens
+    tokens = preprocess(query)
+
+    # Compute term frequency (TF)
+    tf_query = compute_tf(tokens)
+
+    # Compute TF-IDF for the query
+    return compute_tfidf(tf_query, idf_dict)
+
+def semantic_search(query: str, tfidf_matrix: List[Dict[str, float]], data: list, top_n: int = 1) -> List[Dict]:
+    """
+    Performs semantic search on the TEDx dataset using manually computed TF-IDF vectors.
+
+    Args:
+        query (str): The search query.
+        tfidf_matrix: The list of precomputed TF-IDF vectors for the documents.
         data (list): The preloaded data containing documents and their metadata.
         top_n (int): Number of top results to return.
 
@@ -20,14 +42,14 @@ def semantic_search(query: str, tfidf_vectorizer, tfidf_matrix, data: list, top_
         List[Dict]: List of search results with metadata.
     """
     try:
-        # Transform the query using the loaded vectorizer
-        query_vector = tfidf_vectorizer.transform([query])
+        # Compute the TF-IDF vector for the query
+        query_vector = compute_query_vector(query, precomputed_idf)
 
-        # Compute cosine similarities using vectorized operations
-        cosine_similarities = cosine_similarity(query_vector, tfidf_matrix).flatten()
+        # Calculate cosine similarities manually
+        similarities = [cosine_similarity(query_vector, doc_vector) for doc_vector in tfidf_matrix]
 
         # Get the indices of the top N similar documents
-        top_indices = cosine_similarities.argsort()[-top_n:][::-1]
+        top_indices = np.argsort(similarities)[-top_n:][::-1]
 
         # Prepare the search results
         results = []
@@ -38,7 +60,7 @@ def semantic_search(query: str, tfidf_vectorizer, tfidf_matrix, data: list, top_
                 'description': doc.get('description', ''),
                 'presenter': doc.get('presenter', ''),
                 'sdg_tags': doc.get('sdg_tags', []),
-                'similarity_score': float(cosine_similarities[idx]),
+                'similarity_score': float(similarities[idx]),
                 'url': f"https://www.ted.com/talks/{doc.get('slug', '')}"
             }
             results.append(result)

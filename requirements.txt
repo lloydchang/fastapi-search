@@ -4,4 +4,4 @@ fastapi
 uvicorn
 aiofiles
 msgpack
-scikit-learn
+numpy
