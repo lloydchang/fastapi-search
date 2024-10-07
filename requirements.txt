@@ -6,3 +6,4 @@ aiofiles
 msgpack
 numpy
 joblib
+scipy
