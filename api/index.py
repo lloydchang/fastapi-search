@@ -4,7 +4,7 @@ from fastapi import FastAPI, Query
 from typing import List, Dict
 
 # Create a FastAPI app instance
-app = FastAPI(docs_url="/api/docs", openapi_url="/api/openapi.json")
+app = FastAPI(docs_url=None, redoc_url=None)  # Disable automatic documentation
 
 # Create a Search Endpoint for TEDx Talks
 @app.get("/api/search")
@@ -28,6 +28,7 @@ async def search(query: str = Query(..., min_length=1)) -> List[Dict]:
         }
     ]
     return result
+
 
 # # File: api/index.py
 
