@@ -1,14 +1,13 @@
 # File: backend/fastapi/cache/cache_manager.py
 
-import os
-import aiofiles
 import pickle
+import os
 from typing import Any, Optional
 
 # Ensure the cache directory exists
 CACHE_DIRECTORY = './backend/fastapi/cache'
 
-async def ensure_cache_directory_exists():
+def ensure_cache_directory_exists():
     """
     Ensures that the cache directory exists.
     If it doesn't exist, the directory is created.
@@ -16,7 +15,7 @@ async def ensure_cache_directory_exists():
     if not os.path.exists(CACHE_DIRECTORY):
         os.makedirs(CACHE_DIRECTORY)
 
-async def load_cache(cache_file_path: str) -> Optional[Any]:
+def load_cache(cache_file_path: str) -> Optional[Any]:
     """
     Loads data from a cache file if it exists.
 
@@ -26,19 +25,19 @@ async def load_cache(cache_file_path: str) -> Optional[Any]:
     Returns:
         Optional[Any]: Loaded data or None if loading fails.
     """
-    await ensure_cache_directory_exists()
+    ensure_cache_directory_exists()  # Ensure directory exists before loading cache
 
     if os.path.exists(cache_file_path):
         try:
-            async with aiofiles.open(cache_file_path, 'rb') as cache_file:
-                data = await cache_file.read()
-                return pickle.loads(data)
+            with open(cache_file_path, 'rb') as cache_file:
+                data = pickle.load(cache_file)
+            return data
         except Exception:
             return None
     else:
         return None
 
-async def save_cache(data: Any, cache_file_path: str) -> None:
+def save_cache(data: Any, cache_file_path: str) -> None:
     """
     Saves data to a cache file.
 
@@ -46,10 +45,10 @@ async def save_cache(data: Any, cache_file_path: str) -> None:
         data (Any): Data to be cached.
         cache_file_path (str): Path to the cache file.
     """
-    await ensure_cache_directory_exists()
+    ensure_cache_directory_exists()  # Ensure directory exists before saving cache
 
     try:
-        async with aiofiles.open(cache_file_path, 'wb') as cache_file:
-            await cache_file.write(pickle.dumps(data))
+        with open(cache_file_path, 'wb') as cache_file:
+            pickle.dump(data, cache_file)
     except Exception:
         pass

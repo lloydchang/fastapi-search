@@ -1,11 +1,10 @@
 # File: backend/fastapi/data/data_loader.py
 
 import csv
-import aiofiles
 from typing import List, Dict
 from backend.fastapi.cache.cache_manager import load_cache, save_cache
 
-async def load_dataset(file_path: str, cache_file_path: str) -> List[Dict]:
+def load_dataset(file_path: str, cache_file_path: str) -> List[Dict]:
     """
     Loads the TEDx dataset with caching.
 
@@ -16,19 +15,19 @@ async def load_dataset(file_path: str, cache_file_path: str) -> List[Dict]:
     Returns:
         list: Loaded dataset as a list of dictionaries.
     """
-    data = await load_cache(cache_file_path)
+    data = load_cache(cache_file_path)
 
     if data is not None:
         return data
     else:
         try:
             data = []
-            async with aiofiles.open(file_path, mode='r', encoding='utf-8') as csvfile:
-                content = await csvfile.read()
-                reader = csv.DictReader(content.splitlines())
+            with open(file_path, newline='', encoding='utf-8') as csvfile:
+                reader = csv.DictReader(csvfile)
                 for row in reader:
                     data.append(row)
-            await save_cache(data, cache_file_path)
+            # Cache the dataset for future use
+            save_cache(data, cache_file_path)
         except Exception:
             data = []
 
