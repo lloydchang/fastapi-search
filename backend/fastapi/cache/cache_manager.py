@@ -8,7 +8,6 @@ from backend.fastapi.utils.logger import logger  # Import the centralized logger
 # Ensure the cache directory exists
 CACHE_DIRECTORY = './backend/fastapi/cache'
 
-
 def ensure_cache_directory_exists():
     """
     Ensures that the cache directory exists.
@@ -19,7 +18,6 @@ def ensure_cache_directory_exists():
         logger.info(f"Cache directory created at {CACHE_DIRECTORY}.")
     else:
         logger.info(f"Cache directory already exists at {CACHE_DIRECTORY}.")
-
 
 def load_cache(cache_file_path: str) -> Optional[Any]:
     """
@@ -46,7 +44,6 @@ def load_cache(cache_file_path: str) -> Optional[Any]:
     else:
         logger.info(f"Cache file {cache_file_path} does not exist.")
         return None
-
 
 def save_cache(data: Any, cache_file_path: str) -> None:
     """

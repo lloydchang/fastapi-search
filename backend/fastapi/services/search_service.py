@@ -3,21 +3,20 @@
 from typing import List, Dict
 import pandas as pd
 import numpy as np
-from sentence_transformers import SentenceTransformer
-import asyncio
+from sklearn.metrics.pairwise import cosine_similarity
 from backend.fastapi.utils.logger import logger  # Import the centralized logger
 
 number_of_results = 100
 
-async def semantic_search(query: str, data: pd.DataFrame, model: SentenceTransformer, sdg_embeddings, top_n: int = number_of_results) -> List[Dict]:
+def semantic_search(query: str, data: pd.DataFrame, vectorizer, tfidf_matrix, top_n: int = number_of_results) -> List[Dict]:
     """
-    Performs semantic search on the TEDx dataset.
+    Performs semantic search on the TEDx dataset using TF-IDF vectors.
 
     Args:
         query (str): The search query.
         data (pd.DataFrame): The dataset containing TEDx talks.
-        model (SentenceTransformer): The loaded Sentence-BERT model.
-        sdg_embeddings: The precomputed SDG embeddings.
+        vectorizer: The TF-IDF vectorizer.
+        tfidf_matrix: The TF-IDF matrix for the descriptions.
         top_n (int): Number of top results to return.
 
     Returns:
@@ -25,39 +24,14 @@ async def semantic_search(query: str, data: pd.DataFrame, model: SentenceTransfo
     """
     logger.info(f"Performing semantic search for the query: '{query}'.")
 
-    # Log the current columns in the data for debugging
-    logger.info(f"Available columns in the data: {list(data.columns)}")
-
-    # Check if the model and required data are available
-    if model is None or 'description_vector' not in data.columns:
-        logger.error(f"Model is None: {model is None}, 'description_vector' in data columns: {'description_vector' in data.columns}")
-        logger.error("Model or data not available. Make sure 'description_vector' column is present in the dataset.")
-        return [{"error": "Model or data not available. Make sure 'description_vector' column is present in the dataset."}]
-
     try:
-        # Encode the query asynchronously
-        logger.info(f"Encoding query: '{query}' using the model.")
-        query_vector = await asyncio.to_thread(
-            model.encode,
-            query,
-            clean_up_tokenization_spaces=True,
-            convert_to_tensor=True
-        )
-        query_vector = query_vector.cpu().numpy()
-        logger.info(f"Query encoded successfully. Shape: {query_vector.shape}")
+        # Encode the query using the TF-IDF vectorizer
+        query_vector = vectorizer.transform([query])
+        logger.info("Query encoded successfully using TF-IDF.")
 
-        # Convert description vectors to numpy array
-        description_vectors_np = np.array([np.array(vec) for vec in data['description_vector']])
-        logger.info(f"Converted description vectors to numpy array. Shape: {description_vectors_np.shape}")
-
-        # Compute cosine similarities
-        similarities = np.dot(description_vectors_np, query_vector) / (
-            np.linalg.norm(description_vectors_np, axis=1) * np.linalg.norm(query_vector)
-        )
+        # Compute cosine similarities between the query and all documents
+        similarities = cosine_similarity(query_vector, tfidf_matrix).flatten()
         logger.info("Cosine similarities computed successfully.")
-
-        # Handle any NaN values resulting from zero division
-        similarities = np.nan_to_num(similarities)
 
         # Get top N indices
         top_indices = np.argsort(-similarities)[:top_n]

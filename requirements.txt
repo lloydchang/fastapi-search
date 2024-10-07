@@ -1,5 +1,6 @@
-colorlog
 fastapi
-numpy
-pandas
 uvicorn
+pandas
+numpy
+scikit-learn
+colorlog
