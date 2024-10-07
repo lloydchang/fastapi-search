@@ -37,7 +37,7 @@ def get_cached_results(query: str) -> List[Dict]:
     return semantic_search(query, cache_dir, top_n=5)
 
 @app.get("/api/search")
-def search(request: Request, query: str = Query(..., min_length=1, max_length=3)) -> Dict:
+def search(request: Request, query: str = Query(..., min_length=1, max_length=100)) -> Dict:
     request_uuid = uuid.uuid4()
     try:
         results = get_cached_results(query)
