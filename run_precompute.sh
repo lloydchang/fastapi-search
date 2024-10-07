@@ -2,7 +2,6 @@
 
 # File: run_precompute.sh
 
-#!/bin/bash
 set -e
 
 BASE_DIR=$(pwd)

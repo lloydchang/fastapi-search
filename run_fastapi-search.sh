@@ -2,7 +2,6 @@
 
 # File: run_fastapi-serach.sh
 
-#!/bin/bash
 set -e
 
 BASE_DIR=$(pwd)

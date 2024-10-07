@@ -1,10 +1,11 @@
 # File: backend/fastapi/services/search_service.py
 
-from typing import List, Dict
+from typing import List, Dict, Any, Optional
 import numpy as np
 import os
 from threading import Lock
 import logging
+from scipy.sparse import csr_matrix
 
 from backend.fastapi.cache.cache_manager import load_cache
 
@@ -13,10 +14,10 @@ logging.basicConfig(level=logging.DEBUG, format='%(asctime)s [%(levelname)s] %(m
 logger = logging.getLogger(__name__)
 
 # Global variables to hold the loaded resources
-tfidf_matrix = None
-vocabulary = None
-idf_values = None
-data = None
+tfidf_matrix: Optional[csr_matrix] = None
+vocabulary: Optional[Dict[str, int]] = None
+idf_values: Optional[np.ndarray] = None
+data: Optional[List[Dict[str, Any]]] = None
 resources_initialized = False
 load_lock = Lock()
 
@@ -36,9 +37,10 @@ def load_resources(cache_dir: str):
 
         logger.info(f"Starting to load precomputed data from {cache_dir}...")
 
-        # Load TF-IDF matrix
+        # Load TF-IDF matrix (sparse)
         logger.info("Loading TF-IDF matrix...")
-        tfidf_data = load_cache(os.path.join(cache_dir, 'tfidf_matrix.npz'))
+        tfidf_matrix_path = os.path.join(cache_dir, 'tfidf_matrix.npz')
+        tfidf_data = load_cache(tfidf_matrix_path)
         if tfidf_data is None or 'tfidf_matrix' not in tfidf_data:
             raise RuntimeError("TF-IDF matrix not found or corrupted.")
         tfidf_matrix = tfidf_data['tfidf_matrix']
@@ -46,7 +48,8 @@ def load_resources(cache_dir: str):
 
         # Load TF-IDF metadata (vocabulary and IDF)
         logger.info("Loading TF-IDF metadata...")
-        metadata = load_cache(os.path.join(cache_dir, 'tfidf_metadata.npz'))
+        tfidf_metadata_path = os.path.join(cache_dir, 'tfidf_metadata.npz')
+        metadata = load_cache(tfidf_metadata_path)
         if metadata is None or 'vocabulary' not in metadata or 'idf' not in metadata:
             raise RuntimeError("TF-IDF metadata not found or corrupted.")
         vocabulary = metadata['vocabulary'].item()  # Convert from numpy object to dict
@@ -55,13 +58,13 @@ def load_resources(cache_dir: str):
 
         # Load document data
         logger.info("Loading document data...")
-        document_data = load_cache(os.path.join(cache_dir, 'data.npz'))
+        data_path = os.path.join(cache_dir, 'data.npz')
+        document_data = load_cache(data_path)
         if document_data is None or 'data' not in document_data:
             raise RuntimeError("Document data not found or corrupted.")
 
         # Correctly convert each numpy.void object to a dictionary
         try:
-            # Ensure that 'doc.dtype.names' is available
             data = [dict(zip(doc.dtype.names, doc)) for doc in document_data['data']]
         except AttributeError as e:
             logger.error(f"Error converting document data to dictionaries: {e}")
@@ -132,13 +135,21 @@ def semantic_search(query: str, cache_dir: str, top_n: int = 1) -> List[Dict]:
         query_vector = compute_query_vector(query, vocabulary, idf_values)
         logger.debug(f"Query vector computed with shape: {query_vector.shape}")
 
-        # Compute cosine similarities
+        # Compute cosine similarities using sparse matrix operations
         logger.debug("Computing cosine similarities...")
-        dot_products = np.dot(tfidf_matrix, query_vector)
-        magnitudes = np.linalg.norm(tfidf_matrix, axis=1) * np.linalg.norm(query_vector)
-        # To avoid division by zero
-        magnitudes[magnitudes == 0] = 1e-10
-        cosine_similarities = dot_products / magnitudes
+        # Normalize the query vector
+        query_norm = np.linalg.norm(query_vector)
+        if query_norm == 0:
+            logger.warning("Query vector norm is zero. Returning empty results.")
+            return []
+        normalized_query = query_vector / query_norm
+
+        # Compute dot product
+        dot_products = tfidf_matrix.dot(normalized_query)
+
+        # Since tfidf_matrix is sparse and normalized_query is dense, dot_products is a numpy array
+        cosine_similarities = dot_products.flatten()
+
         logger.debug("Cosine similarities computed.")
 
         # Get the top N results
@@ -165,5 +176,5 @@ def semantic_search(query: str, cache_dir: str, top_n: int = 1) -> List[Dict]:
         return results
 
     except Exception as e:
-        logger.error(f"Semantic search failed: {e}")
+        logger.error(f"Semantic search failed: {e}", exc_info=True)
         raise RuntimeError("Semantic search failed.")

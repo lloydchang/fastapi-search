@@ -1,6 +1,6 @@
 # File: backend/fastapi/services/sdg_manager.py
 
-from typing import List, Dict
+from typing import Dict, List
 
 def get_sdg_keywords() -> Dict[str, List[str]]:
     """

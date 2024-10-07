@@ -18,6 +18,8 @@ def load_dataset(file_path: str) -> List[Dict]:
         with open(file_path, mode='r', encoding='utf-8') as csvfile:
             reader = csv.DictReader(csvfile)
             for row in reader:
+                # Initialize 'sdg_tags' as an empty list; will be populated later
+                row['sdg_tags'] = []
                 data.append(row)
     except Exception as e:
         print(f"Failed to load dataset: {e}")

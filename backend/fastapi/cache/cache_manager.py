@@ -3,9 +3,7 @@
 import os
 from typing import Any, Optional, Dict
 import numpy as np
-
-# Ensure the cache directory exists
-CACHE_DIRECTORY = os.path.dirname(__file__)
+from scipy.sparse import load_npz, save_npz
 
 def load_cache(cache_file_path: str) -> Optional[Dict[str, Any]]:
     """
@@ -19,9 +17,15 @@ def load_cache(cache_file_path: str) -> Optional[Dict[str, Any]]:
     """
     if os.path.exists(cache_file_path):
         try:
-            with np.load(cache_file_path, allow_pickle=True) as data:
-                loaded_data = {key: data[key] for key in data.files}
-                return loaded_data
+            if cache_file_path.endswith('tfidf_matrix.npz'):
+                # Load as sparse matrix
+                data = load_npz(cache_file_path)
+                return {'tfidf_matrix': data}
+            else:
+                # Load as regular .npz
+                with np.load(cache_file_path, allow_pickle=True) as data:
+                    loaded_data = {key: data[key] for key in data.files}
+                    return loaded_data
         except Exception as e:
             print(f"Failed to load cache from {cache_file_path}: {e}")
             return None
@@ -39,7 +43,10 @@ def save_cache(data: Any, cache_file_path: str) -> None:
     """
     try:
         if isinstance(data, dict):
-            np.savez_compressed(cache_file_path, **data)
+            if 'tfidf_matrix' in data and hasattr(data['tfidf_matrix'], 'save_npz'):
+                save_npz(cache_file_path, data['tfidf_matrix'])
+            else:
+                np.savez_compressed(cache_file_path, **data)
         else:
             np.savez_compressed(cache_file_path, data=data)
         print(f"Cache saved successfully to {cache_file_path}")
