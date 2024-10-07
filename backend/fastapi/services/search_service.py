@@ -1,22 +1,25 @@
 # File: backend/fastapi/services/search_service.py
 
 from typing import List, Dict
-import pandas as pd
-import numpy as np
-from sklearn.metrics.pairwise import cosine_similarity
-from backend.fastapi.utils.logger import logger  # Import the centralized logger
+from backend.fastapi.utils.logger import logger
+from backend.fastapi.utils.text_processing import (
+    preprocess,
+    compute_tf,
+    compute_tfidf,
+    cosine_similarity,
+)
 
 number_of_results = 100
 
-def semantic_search(query: str, data: pd.DataFrame, vectorizer, tfidf_matrix, top_n: int = number_of_results) -> List[Dict]:
+def semantic_search(query: str, data: list, idf_dict, document_tfidf_vectors, top_n: int = number_of_results) -> List[Dict]:
     """
-    Performs semantic search on the TEDx dataset using TF-IDF vectors.
+    Performs semantic search on the TEDx dataset using custom TF-IDF vectors.
 
     Args:
         query (str): The search query.
-        data (pd.DataFrame): The dataset containing TEDx talks.
-        vectorizer: The TF-IDF vectorizer.
-        tfidf_matrix: The TF-IDF matrix for the descriptions.
+        data (list): The dataset containing TEDx talks.
+        idf_dict: The IDF dictionary.
+        document_tfidf_vectors: Precomputed TF-IDF vectors for the documents.
         top_n (int): Number of top results to return.
 
     Returns:
@@ -25,31 +28,34 @@ def semantic_search(query: str, data: pd.DataFrame, vectorizer, tfidf_matrix, to
     logger.info(f"Performing semantic search for the query: '{query}'.")
 
     try:
-        # Encode the query using the TF-IDF vectorizer
-        query_vector = vectorizer.transform([query])
-        logger.info("Query encoded successfully using TF-IDF.")
+        query_tokens = preprocess(query)
+        query_tf = compute_tf(query_tokens)
+        query_tfidf = compute_tfidf(query_tf, idf_dict)
 
-        # Compute cosine similarities between the query and all documents
-        similarities = cosine_similarity(query_vector, tfidf_matrix).flatten()
-        logger.info("Cosine similarities computed successfully.")
+        similarities = []
+        for idx, doc_tfidf in enumerate(document_tfidf_vectors):
+            sim = cosine_similarity(query_tfidf, doc_tfidf)
+            similarities.append((idx, sim))
 
-        # Get top N indices
-        top_indices = np.argsort(-similarities)[:top_n]
+        # Sort by similarity
+        similarities.sort(key=lambda x: x[1], reverse=True)
+        top_indices = [idx for idx, _ in similarities[:top_n]]
         logger.info(f"Top {top_n} indices identified.")
 
         # Prepare the search results
         results = []
         for idx in top_indices:
+            doc = data[idx]
             # Check if 'sdg_tags' is present, otherwise use an empty list as a placeholder
-            sdg_tags = data.iloc[idx].get('sdg_tags', []) if 'sdg_tags' in data.columns else []
+            sdg_tags = doc.get('sdg_tags', [])
 
             result = {
-                'title': data.iloc[idx]['slug'].replace('_', ' '),
-                'description': data.iloc[idx]['description'],
-                'presenter': data.iloc[idx]['presenterDisplayName'],
+                'title': doc.get('slug', '').replace('_', ' '),
+                'description': doc.get('description', ''),
+                'presenter': doc.get('presenterDisplayName', ''),
                 'sdg_tags': sdg_tags,
-                'similarity_score': float(similarities[idx]),
-                'url': f"https://www.ted.com/talks/{data.iloc[idx]['slug']}"
+                'similarity_score': float(similarities[idx][1]),
+                'url': f"https://www.ted.com/talks/{doc.get('slug', '')}"
             }
             results.append(result)
 

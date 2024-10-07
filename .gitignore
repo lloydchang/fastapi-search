@@ -1,3 +1,9 @@
+# Ignore cache files but not cache_manager.py
+backend/fastapi/cache/*.pkl
+
+# Ignore data CSV files
+backend/fastapi/data/*.csv
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
