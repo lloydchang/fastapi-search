@@ -4,4 +4,4 @@ fastapi
 uvicorn
 aiofiles
 msgpack
-sklearn
+scikit-learn
