@@ -2,9 +2,10 @@
 
 import asyncio
 import warnings
+import os
 from typing import List, Dict
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.fastapi.data.data_loader import load_dataset
@@ -35,7 +36,7 @@ tfidf_vectors_cache_path = "backend/fastapi/cache/document_tfidf_vectors.pkl"
 async def load_resources():
     global data, idf_dict, document_tfidf_vectors, resources_initialized
 
-    # Step 1: Load from precomputed caches
+    # Step 1: Attempt to load from precomputed caches
     data, documents, idf_dict, document_tfidf_vectors = await asyncio.gather(
         load_cache(data_cache_path),
         load_cache(documents_cache_path),
@@ -43,9 +44,11 @@ async def load_resources():
         load_cache(tfidf_vectors_cache_path)
     )
 
-    # Step 2: Check if any resource is missing; if so, raise an error
+    # Step 2: If any of the caches are missing, raise an error to indicate missing cache files
     if data is None or documents is None or idf_dict is None or document_tfidf_vectors is None:
-        raise RuntimeError("One or more required cache files are missing. Run `precompute_cache.py` to generate them.")
+        raise RuntimeError(
+            "Cache files are missing. Please run the `precompute_cache.py` script in the `utils` directory to generate the necessary caches."
+        )
 
     resources_initialized = True
     resource_event.set()
@@ -61,7 +64,9 @@ async def search(query: str = Query(..., min_length=1)) -> List[Dict]:
     await resource_event.wait()
 
     if data is None or idf_dict is None or document_tfidf_vectors is None:
-        return [{"error": "Data or TF-IDF vectors not available."}]
+        raise HTTPException(
+            status_code=503, detail="Data or TF-IDF vectors not available. Run `precompute_cache.py`."
+        )
 
     result = await semantic_search(query, data, idf_dict, document_tfidf_vectors)
     return result
