@@ -29,8 +29,8 @@ fi
 # Install precompute requirements
 if [ -f "requirements_precompute.txt" ]; then
     echo 'Installing precompute requirements...'
-    pip install --upgrade pip
-    pip install -r requirements_precompute.txt
+    pip install --upgrade pip 2>&1 > /dev/null
+    pip install -r requirements_precompute.txt 2>&1 > /dev/null
 else
     echo 'requirements_precompute.txt not found. Please ensure it exists.'
     exit 1

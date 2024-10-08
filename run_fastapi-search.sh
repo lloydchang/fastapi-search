@@ -23,8 +23,8 @@ fi
 # Install runtime requirements
 if [ -f "requirements.txt" ]; then
     echo 'Installing runtime requirements...'
-    pip install --upgrade pip
-    pip install -r requirements.txt
+    pip install --upgrade pip 2>&1 > /dev/null
+    pip install -r requirements.txt 2>&1 > /dev/null
 else
     echo 'requirements.txt not found. Please ensure it exists.'
     exit 1
