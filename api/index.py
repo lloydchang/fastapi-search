@@ -3,6 +3,7 @@
 import time
 import uuid
 import os
+import random
 from pathlib import Path
 from typing import List, Dict, Optional
 from fastapi import FastAPI, Query, HTTPException, Request
@@ -40,7 +41,8 @@ vocabulary = load_vocabulary(cache_dir)
 @lru_cache(maxsize=1024)
 def get_cached_results(query: str) -> List[Dict]:
     """Fetch cached search results for the given query."""
-    return semantic_search(query, cache_dir, top_n=3)  # Return the top 3 results
+    results = semantic_search(query, cache_dir, top_n=100)  # Retrieve up to 100 results
+    return random.sample(results, 3) if len(results) > 3 else results  # Randomly sample 3 results from the top 100
 
 @app.get("/api/search")
 def search(request: Request, query: str = Query(..., min_length=1, max_length=100)) -> Dict:
