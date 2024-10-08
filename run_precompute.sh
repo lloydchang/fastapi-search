@@ -2,7 +2,7 @@
 
 # File: run_precompute.sh
 
-set -euxo pipefail
+set -euo pipefail
 
 cd $(dirname $0)
 
@@ -37,6 +37,7 @@ else
 fi
 
 # Set PYTHONPATH
+export PYTHONPATH="${PYTHONPATH:-$(pwd)}"
 export PYTHONPATH="$BASE_DIR:$PYTHONPATH"
 
 # Run the precompute_cache.py. script

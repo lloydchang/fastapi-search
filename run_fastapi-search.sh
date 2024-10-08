@@ -2,7 +2,7 @@
 
 # File: run_fastapi-serach.sh
 
-set -euxo pipefail
+set -euo pipefail
 
 cd $(dirname $0)
 
@@ -31,6 +31,7 @@ else
 fi
 
 # Set PYTHONPATH
+export PYTHONPATH="${PYTHONPATH:-$(pwd)}"
 export PYTHONPATH="$BASE_DIR:$PYTHONPATH"
 
 # Start Uvicorn server
