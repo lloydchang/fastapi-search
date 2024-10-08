@@ -40,7 +40,7 @@ vocabulary = load_vocabulary(cache_dir)
 @lru_cache(maxsize=1024)
 def get_cached_results(query: str) -> List[Dict]:
     """Fetch cached search results for the given query."""
-    return semantic_search(query, cache_dir, top_n=100)  # Change to return the top 100 results
+    return semantic_search(query, cache_dir, top_n=100)  # Return the top 100 results
 
 @app.get("/api/search")
 def search(request: Request, query: str = Query(..., min_length=1, max_length=100)) -> Dict:
