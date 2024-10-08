@@ -2,7 +2,9 @@
 
 # File: run_fastapi-serach.sh
 
-set -e
+set -euxo pipefail
+
+cd $(dirname $0)
 
 BASE_DIR=$(pwd)
 

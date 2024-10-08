@@ -2,7 +2,7 @@
 
 # File: run_precompute.sh
 
-set -e
+set -euxo pipefail
 
 cd $(dirname $0)
 
