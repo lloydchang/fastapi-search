@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse
 from functools import lru_cache
 from backend.fastapi.services.semantic_search import semantic_search
 from backend.fastapi.cache.cache_manager_read import load_cache
+from backend.fastapi.data.sdg_keywords import sdg_keywords
 
 # Initialize FastAPI app
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
@@ -38,13 +39,13 @@ def load_vocabulary(cache_dir: str) -> Dict[str, int]:
 # Load vocabulary on startup
 vocabulary = load_vocabulary(cache_dir)
 
-@lru_cache(maxsize=100)
-def cached_semantic_search(query: str, top_n: int = 3) -> List[Dict]:
+@lru_cache(maxsize=100)  # Adjusted cache size for memory considerations
+def cached_semantic_search(query: str, top_n: int = 10) -> List[Dict]:
     """Cached wrapper for performing a semantic search."""
     print(f"DEBUG: Using LRU cache for query: '{query}'")
     return perform_semantic_search(query, top_n)
 
-def perform_semantic_search(query: str, top_n: int = 3) -> List[Dict]:
+def perform_semantic_search(query: str, top_n: int = 10) -> List[Dict]:
     """Perform a new semantic search for the given query and return the top `top_n` results."""
     print(f"DEBUG: Performing semantic search for query: '{query}'...")
     results = semantic_search(query, cache_dir, top_n=top_n)
@@ -76,12 +77,19 @@ def filter_by_sdg_tag(tag: str) -> List[Dict]:
         else:
             raise TypeError(f"Unsupported documents structure type: {type(documents)}")
 
-        # Filter documents based on the provided SDG tag
-        filtered_results = [
-            doc for doc in doc_dict.values() if isinstance(doc, dict) and tag in doc.get('sdg_tags', [])
-        ]
+        # If the tag is simply 'sdg', we want to include all documents related to SDGs
+        if tag.lower() == "sdg":
+            filtered_results = [
+                doc for doc in doc_dict.values() if isinstance(doc, dict) and any(sdgt in doc.get('sdg_tags', []) for sdgt in sdg_keywords.keys())
+            ]
+        else:
+            # Filter documents based on the provided SDG tag
+            filtered_results = [
+                doc for doc in doc_dict.values() if isinstance(doc, dict) and tag in doc.get('sdg_tags', [])
+            ]
+        
         print(f"DEBUG: Found {len(filtered_results)} results for SDG tag: '{tag}'")
-        return filtered_results[:3]  # Limit to top 3 results for consistency
+        return filtered_results[:10]  # Limit to top 10 results for consistency
 
     except Exception as e:
         print(f"ERROR: Failed to filter by SDG tag '{tag}': {e}")
@@ -89,7 +97,7 @@ def filter_by_sdg_tag(tag: str) -> List[Dict]:
 
 def normalize_sdg_query(query: str) -> str:
     """Normalize the query if it matches the SDG pattern: 'sdg', one or more spaces, and a digit."""
-    sdg_pattern = r"^sdg\s+\d+$"  # Match 'sdg', followed by spaces, and a digit (e.g., 'sdg 1')
+    sdg_pattern = r"^sdg\s*\d*$"  # Match 'sdg', followed by optional spaces and an optional digit (e.g., 'sdg', 'sdg 1')
     if re.match(sdg_pattern, query, re.IGNORECASE):
         # Normalize to format: 'sdg' followed directly by the digit (e.g., 'sdg 1' -> 'sdg1')
         return re.sub(r"\s+", "", query.lower())  # Remove spaces and convert to lowercase
@@ -111,11 +119,11 @@ def search(request: Request, query: str = Query(..., min_length=1, max_length=10
             results = filter_by_sdg_tag(normalized_query)
         else:
             # Perform standard semantic search using the LRU cache
-            results = cached_semantic_search(query, top_n=3)
+            results = cached_semantic_search(query, top_n=10)
 
-        # Ensure `sdg_tags` are included in the results
+        # Ensure sdg_tags are included in the results
         for result in results:
-            result['sdg_tags'] = result.get('sdg_tags', [])  # Add empty `sdg_tags` if not present
+            result['sdg_tags'] = result.get('sdg_tags', [])  # Add empty sdg_tags if not present
 
     except RuntimeError as e:
         print(f"{request_uuid} [Cache Error] {e}")
