@@ -3,9 +3,8 @@
 import time
 import uuid
 import os
-import random
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import List, Dict
 from fastapi import FastAPI, Query, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -37,15 +36,21 @@ def load_vocabulary(cache_dir: str) -> Dict[str, int]:
 # Load vocabulary on startup
 vocabulary = load_vocabulary(cache_dir)
 
-def perform_semantic_search(query: str) -> List[Dict]:
-    """Perform a new semantic search for the given query and return the results."""
+def perform_semantic_search(query: str, top_n: int = 3) -> List[Dict]:
+    """Perform a new semantic search for the given query and return the top `top_n` results."""
     print(f"DEBUG: Performing semantic search for query: '{query}'...")
-    results = semantic_search(query, cache_dir, top_n=100)  # Retrieve up to 100 results
+    # Directly retrieve only the top `top_n` results
+    results = semantic_search(query, cache_dir, top_n=top_n)
 
-    # Log results before sampling
+    # Check if results are available
+    if results is None:
+        print(f"DEBUG: No results returned for query: '{query}'.")
+        return []
+
     print(f"DEBUG: Retrieved {len(results)} results for query: '{query}'")
-    # Randomly sample 3 results from the top 100 if available
-    return random.sample(results, 3) if len(results) > 3 else results
+
+    # Return only the top `top_n` results
+    return results
 
 @app.get("/api/search")
 def search(request: Request, query: str = Query(..., min_length=1, max_length=100)) -> Dict:
@@ -55,15 +60,12 @@ def search(request: Request, query: str = Query(..., min_length=1, max_length=10
     print(f"{request_uuid} [Search Endpoint Handling] Starting search request processing for query: '{query}'...")
 
     try:
-        # Perform a new search
-        results = perform_semantic_search(query)
-        if not results or all(result.get('similarity', 0) == 0 for result in results):
-            print(f"{request_uuid} [Search Endpoint Handling] No results found for query: '{query}'.")
-            return JSONResponse(status_code=200, content={"message": "No results found."})
+        # Perform a new search, limiting to top 3 results directly in the query
+        results = perform_semantic_search(query, top_n=3)
 
-        # Include sdg_tags in the search results
+        # Ensure `sdg_tags` are included in the results
         for result in results:
-            result['sdg_tags'] = result.get('sdg_tags', [])  # Ensure sdg_tags are included in the results
+            result['sdg_tags'] = result.get('sdg_tags', [])  # Add empty sdg_tags if not present
 
     except RuntimeError as e:
         print(f"{request_uuid} [Cache Error] {e}")
@@ -75,4 +77,5 @@ def search(request: Request, query: str = Query(..., min_length=1, max_length=10
     search_request_end_time = time.time()
     print(f"{request_uuid} [Search Endpoint Handling] Search request handled in {search_request_end_time - search_request_start_time:.4f} seconds.")
 
+    # Return the results
     return {"results": results}
