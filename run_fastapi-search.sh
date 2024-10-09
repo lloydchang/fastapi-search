@@ -9,7 +9,7 @@ cd $(dirname $0)
 BASE_DIR=$(pwd)
 
 # Start port range for FastAPI
-START_PORT=58000
+START_PORT=8000
 MAX_PORT=65535  # Set to the maximum allowable port number
 
 echo "Starting FastAPI server..."
