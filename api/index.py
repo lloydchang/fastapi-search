@@ -9,7 +9,6 @@ from typing import List, Dict, Optional
 from fastapi import FastAPI, Query, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from functools import lru_cache
 from backend.fastapi.services.semantic_search import semantic_search
 from backend.fastapi.cache.cache_manager_read import load_cache
 
@@ -38,23 +37,28 @@ def load_vocabulary(cache_dir: str) -> Dict[str, int]:
 # Load vocabulary on startup
 vocabulary = load_vocabulary(cache_dir)
 
-@lru_cache(maxsize=1024)
-def get_cached_results(query: str) -> List[Dict]:
-    """Fetch cached search results for the given query."""
+def perform_semantic_search(query: str) -> List[Dict]:
+    """Perform a new semantic search for the given query and return the results."""
+    print(f"DEBUG: Performing semantic search for query: '{query}'...")
     results = semantic_search(query, cache_dir, top_n=100)  # Retrieve up to 100 results
-    return random.sample(results, 3) if len(results) > 3 else results  # Randomly sample 3 results from the top 100
+
+    # Log results before sampling
+    print(f"DEBUG: Retrieved {len(results)} results for query: '{query}'")
+    # Randomly sample 3 results from the top 100 if available
+    return random.sample(results, 3) if len(results) > 3 else results
 
 @app.get("/api/search")
 def search(request: Request, query: str = Query(..., min_length=1, max_length=100)) -> Dict:
-    """Handle the search endpoint."""
+    """Handle the search endpoint by performing a new semantic search."""
     request_uuid = uuid.uuid4()
     search_request_start_time = time.time()
     print(f"{request_uuid} [Search Endpoint Handling] Starting search request processing for query: '{query}'...")
 
     try:
-        # Retrieve cached results or perform a new search
-        results = get_cached_results(query)
+        # Perform a new search
+        results = perform_semantic_search(query)
         if not results or all(result.get('similarity', 0) == 0 for result in results):
+            print(f"{request_uuid} [Search Endpoint Handling] No results found for query: '{query}'.")
             return JSONResponse(status_code=200, content={"message": "No results found."})
 
         # Include sdg_tags in the search results
