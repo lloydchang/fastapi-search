@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from backend.fastapi.services.semantic_search import semantic_search
 from backend.fastapi.cache.cache_manager_read import load_cache
+from functools import lru_cache
 
 # Initialize FastAPI app
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
@@ -36,6 +37,15 @@ def load_vocabulary(cache_dir: str) -> Dict[str, int]:
 # Load vocabulary on startup
 vocabulary = load_vocabulary(cache_dir)
 
+@lru_cache(maxsize=100)
+def cached_semantic_search(query: str, top_n: int = 3) -> List[Dict]:
+    """
+    Cached wrapper for performing a semantic search.
+    This function uses LRU cache to store results for repeated queries.
+    """
+    print(f"DEBUG: Using LRU cache for query: '{query}'")
+    return perform_semantic_search(query, top_n)
+
 def perform_semantic_search(query: str, top_n: int = 3) -> List[Dict]:
     """Perform a new semantic search for the given query and return the top `top_n` results."""
     print(f"DEBUG: Performing semantic search for query: '{query}'...")
@@ -60,8 +70,8 @@ def search(request: Request, query: str = Query(..., min_length=1, max_length=10
     print(f"{request_uuid} [Search Endpoint Handling] Starting search request processing for query: '{query}'...")
 
     try:
-        # Perform a new search, limiting to top 3 results directly in the query
-        results = perform_semantic_search(query, top_n=3)
+        # Perform a new search using the LRU cache
+        results = cached_semantic_search(query, top_n=3)
 
         # Ensure `sdg_tags` are included in the results
         for result in results:
