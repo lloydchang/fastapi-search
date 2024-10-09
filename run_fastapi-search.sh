@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# File: run_fastapi-serach.sh
+# File: run_fastapi-search.sh
 
 set -euo pipefail
 
@@ -8,7 +8,30 @@ cd $(dirname $0)
 
 BASE_DIR=$(pwd)
 
-echo 'Starting FastAPI server...'
+# Start port range for FastAPI
+START_PORT=58000
+MAX_PORT=65535  # Set to the maximum allowable port number
+
+echo "Starting FastAPI server..."
+
+# Function to find the next available port starting from START_PORT
+find_available_port() {
+  port=$START_PORT
+  while [ $port -le $MAX_PORT ]; do
+    if ! lsof -i :$port > /dev/null; then
+      echo $port
+      return
+    fi
+    port=$((port + 1))
+  done
+
+  echo "No available ports found in the range $START_PORT to $MAX_PORT."
+  exit 1
+}
+
+# Get the first available port starting from START_PORT
+AVAILABLE_PORT=$(find_available_port)
+echo "Using available port: $AVAILABLE_PORT"
 
 # Activate virtual environment or create one
 if [ -d "venv" ]; then
@@ -23,8 +46,8 @@ fi
 # Install runtime requirements
 if [ -f "requirements.txt" ]; then
     echo 'Installing runtime requirements...'
-    pip install --upgrade pip 2>&1 > /dev/null
-    pip install -r requirements.txt 2>&1 > /dev/null
+    pip install --upgrade pip > /dev/null
+    pip install -r requirements.txt > /dev/null
 else
     echo 'requirements.txt not found. Please ensure it exists.'
     exit 1
@@ -34,5 +57,6 @@ fi
 export PYTHONPATH="${PYTHONPATH:-$(pwd)}"
 export PYTHONPATH="$BASE_DIR:$PYTHONPATH"
 
-# Start Uvicorn server
-uvicorn api.index:app --host localhost --port 8000 --reload
+# Start Uvicorn server on the available port
+echo "Running Uvicorn server on localhost:$AVAILABLE_PORT..."
+uvicorn api.index:app --host localhost --port $AVAILABLE_PORT --reload
