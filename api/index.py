@@ -15,7 +15,7 @@ from backend.fastapi.cache.cache_manager_read import load_cache
 from backend.fastapi.data.sdg_keywords import sdg_keywords
 
 # Initialize FastAPI app
-app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+app = FastAPI(docs_url="/api/search/docs", redoc_url="/api/search/redoc", openapi_url="/api/search/openapi.json")
 
 # Configure CORS
 origins = [
