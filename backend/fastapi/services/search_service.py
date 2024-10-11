@@ -24,7 +24,7 @@ def semantic_search(query: str, cache_dir: str, top_n: int = 5) -> List[Dict]:
     if cache is None or 'tfidf_matrix' not in cache:
         raise RuntimeError("TF-IDF matrix not found in cache.")
 
-    tfidf_matrix = cache['tfidf_matrix']  # This is a dense numpy array
+    tfidf_matrix = cache['tfidf_matrix']  # This is a sparse matrix
 
     # Load the vectorizer metadata (assuming it's saved during precompute)
     vectorizer_metadata_path = os.path.join(cache_dir, 'vectorizer_metadata.npz')
@@ -33,13 +33,12 @@ def semantic_search(query: str, cache_dir: str, top_n: int = 5) -> List[Dict]:
         vectorizer_params = data['vectorizer_params'].item()
 
     # Initialize the vectorizer with saved parameters
-    vectorizer = TfidfVectorizer()
+    vectorizer = TfidfVectorizer(**vectorizer_params)
     vectorizer.vocabulary_ = vocabulary
     vectorizer._validate_vocabulary()
-    # Note: You may need to set other parameters as needed
 
     # Transform the query into TF-IDF vector
-    query_vector = vectorizer.transform([query]).toarray()  # Dense vector
+    query_vector = vectorizer.transform([query])  # Keep as sparse vector
 
     # Compute cosine similarity
     similarities = cosine_similarity(query_vector, tfidf_matrix)[0]
@@ -54,3 +53,18 @@ def semantic_search(query: str, cache_dir: str, top_n: int = 5) -> List[Dict]:
         })
 
     return results
+
+def load_cache(file_path: str) -> Dict:
+    """
+    Loads cached data from a .npz file.
+
+    Args:
+        file_path (str): The path to the .npz file.
+
+    Returns:
+        Dict: Loaded data from the cache.
+    """
+    if os.path.exists(file_path):
+        with np.load(file_path, allow_pickle=True) as data:
+            return dict(data)
+    return None
