@@ -16,18 +16,19 @@ logger = logging.getLogger(__name__)
 def load_tedx_documents(csv_file_path: str) -> List[Dict[str, str]]:
     """Load TEDx talks from the provided CSV file and extract metadata and text content."""
     tedx_df = pd.read_csv(csv_file_path)
-    if 'description' not in tedx_df.columns:
-        raise ValueError(f"Column 'description' not found in the CSV file {csv_file_path}")
+    if 'description' not in tedx_df.columns or 'slug' not in tedx_df.columns:
+        raise ValueError(f"Required columns 'description' or 'slug' not found in the CSV file {csv_file_path}")
     
     documents = tedx_df[['slug', 'description', 'presenterDisplayName']].dropna().to_dict('records')
     logger.info(f"Loaded {len(documents)} TEDx documents from the CSV file.")
     return documents
 
 def create_tfidf_matrix(documents: List[Dict[str, str]]) -> Any:
-    """Create a sparse TF-IDF matrix from the provided document descriptions."""
-    descriptions = [doc['description'] for doc in documents]
+    """Create a sparse TF-IDF matrix from the combined 'description' and 'slug' fields."""
+    # Combine slug and description fields to improve semantic search capabilities.
+    combined_texts = [f"{doc['slug']} {doc['description']}" for doc in documents]
     vectorizer = TfidfVectorizer(stop_words='english', ngram_range=(1, 2), max_features=10000)
-    tfidf_matrix = vectorizer.fit_transform(descriptions)
+    tfidf_matrix = vectorizer.fit_transform(combined_texts)
     logger.info(f"TF-IDF matrix created. Shape: {tfidf_matrix.shape}")
     return tfidf_matrix, vectorizer
 
@@ -109,7 +110,7 @@ def precompute_cache():
     # Load TEDx documents
     documents = load_tedx_documents(csv_file_path)
 
-    # Create the TF-IDF matrix
+    # Create the TF-IDF matrix using both 'slug' and 'description'
     tfidf_matrix, vectorizer = create_tfidf_matrix(documents)
 
     # Get SDG tags for each document based on semantic matching

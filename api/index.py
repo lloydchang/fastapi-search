@@ -123,10 +123,10 @@ def search(request: Request, query: str = Query(..., min_length=1, max_length=10
             results = cached_semantic_search(query, top_n=100)
 
         # Randomly select 10 results from the top 100
-        if len(results) > 10:
-            results = random.sample(results, 10)
-        else:
-            random.shuffle(results)  # If less than 10, just shuffle the results
+        # if len(results) > 10:
+        #     results = random.sample(results, 10)
+        # else:
+        #     random.shuffle(results)  # If less than 10, just shuffle the results
 
         # Ensure sdg_tags are included in the results
         for result in results:
