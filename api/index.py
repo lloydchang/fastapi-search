@@ -4,6 +4,7 @@ import time
 import uuid
 import os
 import re
+import random  # Import random for shuffling and sampling
 from pathlib import Path
 from typing import List, Dict
 from fastapi import FastAPI, Query, HTTPException, Request
@@ -39,13 +40,13 @@ def load_vocabulary(cache_dir: str) -> Dict[str, int]:
 # Load vocabulary on startup
 vocabulary = load_vocabulary(cache_dir)
 
-@lru_cache(maxsize=100)  # Adjusted cache size for memory considerations
-def cached_semantic_search(query: str, top_n: int = 10) -> List[Dict]:
+@lru_cache(maxsize=1000)  # Increased cache size for better performance
+def cached_semantic_search(query: str, top_n: int = 100) -> List[Dict]:
     """Cached wrapper for performing a semantic search."""
     print(f"DEBUG: Using LRU cache for query: '{query}'")
     return perform_semantic_search(query, top_n)
 
-def perform_semantic_search(query: str, top_n: int = 10) -> List[Dict]:
+def perform_semantic_search(query: str, top_n: int = 100) -> List[Dict]:
     """Perform a new semantic search for the given query and return the top `top_n` results."""
     print(f"DEBUG: Performing semantic search for query: '{query}'...")
     results = semantic_search(query, cache_dir, top_n=top_n)
@@ -89,7 +90,7 @@ def filter_by_sdg_tag(tag: str) -> List[Dict]:
             ]
         
         print(f"DEBUG: Found {len(filtered_results)} results for SDG tag: '{tag}'")
-        return filtered_results[:10]  # Limit to top 10 results for consistency
+        return filtered_results[:100]  # Change the limit to 100 to be consistent with `top_n` update
 
     except Exception as e:
         print(f"ERROR: Failed to filter by SDG tag '{tag}': {e}")
@@ -119,7 +120,13 @@ def search(request: Request, query: str = Query(..., min_length=1, max_length=10
             results = filter_by_sdg_tag(normalized_query)
         else:
             # Perform standard semantic search using the LRU cache
-            results = cached_semantic_search(query, top_n=10)
+            results = cached_semantic_search(query, top_n=100)
+
+        # Randomly select 10 results from the top 100
+        if len(results) > 10:
+            results = random.sample(results, 10)
+        else:
+            random.shuffle(results)  # If less than 10, just shuffle the results
 
         # Ensure sdg_tags are included in the results
         for result in results:
