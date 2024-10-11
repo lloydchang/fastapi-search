@@ -9,7 +9,7 @@ def debug_log(message: str):
     """Utility function to print debug logs with a consistent format."""
     print(f"[DEBUG] {message}")
 
-def load_tfidf_components(cache_dir: str) -> Dict[str, np.ndarray]:
+def load_tfidf_components(cache_dir: str) -> Dict[str, Dict[str, np.ndarray]]:
     """Load the sparse TF-IDF matrix and associated metadata from cache."""
     matrix_path = os.path.join(cache_dir, "tfidf_matrix.npz")
     metadata_path = os.path.join(cache_dir, "tfidf_metadata.npz")
@@ -28,17 +28,6 @@ def load_tfidf_components(cache_dir: str) -> Dict[str, np.ndarray]:
     shape = tuple(matrix_data['shape'])
 
     debug_log(f"TF-IDF matrix shape: {shape}, data length: {len(data)}, indices length: {len(indices)}")
-
-    # Reconstruct the dense matrix using the components
-    debug_log(f"Reconstructing dense matrix from sparse components...")
-    tfidf_matrix = np.zeros(shape)
-    for row in range(shape[0]):
-        start = indptr[row]
-        end = indptr[row + 1]
-        row_indices = indices[start:end]
-        row_data = data[start:end]
-        tfidf_matrix[row, row_indices] = row_data
-    debug_log(f"Reconstructed dense matrix with shape: {tfidf_matrix.shape}")
 
     # Load metadata
     debug_log(f"Loading metadata from: {metadata_path}")
@@ -63,12 +52,22 @@ def load_tfidf_components(cache_dir: str) -> Dict[str, np.ndarray]:
         raise RuntimeError(f"Key missing in document metadata file: {document_metadata.files}")
 
     debug_log(f"Loaded document metadata with {len(documents)} entries.")
-    return {"tfidf_matrix": tfidf_matrix, "vocabulary": vocabulary, "idf_values": idf_values, "documents": documents}
+    return {
+        "tfidf_matrix": {
+            "data": data,
+            "indices": indices,
+            "indptr": indptr,
+            "shape": shape
+        },
+        "vocabulary": vocabulary,
+        "idf_values": idf_values,
+        "documents": documents
+    }
 
-def vectorize_query(query: str, vocabulary: Dict[str, int], idf_values: np.ndarray) -> np.ndarray:
-    """Create a TF-IDF vector for the query based on the vocabulary and IDF values."""
+def vectorize_query(query: str, vocabulary: Dict[str, int], idf_values: np.ndarray) -> Dict[int, float]:
+    """Create a sparse representation for the query based on the vocabulary and IDF values."""
     debug_log(f"Vectorizing query: '{query}'")
-    query_vector = np.zeros(len(vocabulary))
+    query_vector = {}
     tokens = query.lower().split()
     token_counts = {token: tokens.count(token) for token in set(tokens)}
 
@@ -77,7 +76,7 @@ def vectorize_query(query: str, vocabulary: Dict[str, int], idf_values: np.ndarr
             index = vocabulary[term]
             query_vector[index] = count * idf_values[index]
 
-    debug_log(f"Query vector created: {query_vector}")
+    debug_log(f"Query vector created with {len(query_vector)} non-zero entries")
     return query_vector
 
 def semantic_search(query: str, cache_dir: str, top_n: int = 5) -> List[Dict]:
@@ -101,31 +100,48 @@ def semantic_search(query: str, cache_dir: str, top_n: int = 5) -> List[Dict]:
         debug_log(f"Error vectorizing query '{query}': {e}")
         raise RuntimeError(f"Query vectorization failed: {e}")
 
-    # Calculate similarities using numpy operations
+    # Calculate cosine similarities manually
     try:
         debug_log("Calculating cosine similarities...")
-        dot_products = np.dot(tfidf_matrix, query_vector)
-        doc_norms = np.linalg.norm(tfidf_matrix, axis=1)
-        query_norm = np.linalg.norm(query_vector)
+        data, indices, indptr, shape = (
+            tfidf_matrix['data'], tfidf_matrix['indices'], tfidf_matrix['indptr'], tfidf_matrix['shape']
+        )
+        num_docs = shape[0]
+        similarities = []
 
-        if query_norm == 0:
-            debug_log("Query vector norm is zero; returning empty results.")
-            return []
+        for doc_id in range(num_docs):
+            start = indptr[doc_id]
+            end = indptr[doc_id + 1]
+            doc_indices = indices[start:end]
+            doc_data = data[start:end]
 
-        cosine_similarities = dot_products / (doc_norms * query_norm + 1e-10)
-        top_indices = cosine_similarities.argsort()[-top_n:][::-1]
+            # Calculate dot product between the document vector and the query vector
+            dot_product = sum(query_vector.get(idx, 0) * doc_data[i] for i, idx in enumerate(doc_indices))
 
-        debug_log(f"Top document indices: {top_indices}")
+            # Calculate norms for cosine similarity
+            doc_norm = np.sqrt(sum(val ** 2 for val in doc_data))
+            query_norm = np.sqrt(sum(val ** 2 for val in query_vector.values()))
+
+            if query_norm == 0 or doc_norm == 0:
+                similarity = 0.0
+            else:
+                similarity = dot_product / (doc_norm * query_norm)
+
+            similarities.append((doc_id, similarity))
+
+        # Sort by similarity and select the top_n results
+        similarities = sorted(similarities, key=lambda x: x[1], reverse=True)[:top_n]
         results = [
             {
-                'document_id': int(idx),
-                'similarity': float(cosine_similarities[idx]),
-                'slug': documents[idx]['slug'],
-                'description': documents[idx]['description'],
-                'presenter': documents[idx]['presenterDisplayName'],
-                'sdg_tags': documents[idx].get('sdg_tags', [])  # Add sdg_tags to the result
-            } for idx in top_indices
+                'document_id': int(doc_id),
+                'similarity': float(similarity),
+                'slug': documents[doc_id]['slug'],
+                'description': documents[doc_id]['description'],
+                'presenter': documents[doc_id]['presenterDisplayName'],
+                'sdg_tags': documents[doc_id].get('sdg_tags', [])
+            } for doc_id, similarity in similarities
         ]
+
         debug_log(f"Search results: {results}")
     except Exception as e:
         debug_log(f"Error during semantic search: {e}")
