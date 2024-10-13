@@ -3,8 +3,8 @@
 import os
 import numpy as np
 from typing import List, Dict
-from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.feature_extraction.text import TfidfVectorizer
+from collections import defaultdict
+import math
 
 # Debugging helper function for consistent logging
 def debug_log(message: str):
@@ -61,7 +61,7 @@ def load_tfidf_components(cache_dir: str) -> Dict[str, Dict[str, np.ndarray]]:
 def vectorize_query(query: str, vocabulary: Dict[str, int], idf_values: np.ndarray) -> Dict[int, float]:
     """Create a sparse representation for the query based on the vocabulary and IDF values."""
     debug_log(f"Vectorizing query: '{query}'")
-    query_vector = {}
+    query_vector = defaultdict(float)
     tokens = query.lower().split()
     token_counts = {token: tokens.count(token) for token in set(tokens)}
 
@@ -72,6 +72,16 @@ def vectorize_query(query: str, vocabulary: Dict[str, int], idf_values: np.ndarr
 
     debug_log(f"Query vector created with {len(query_vector)} non-zero entries")
     return query_vector
+
+def cosine_similarity_manual(vec1: np.ndarray, vec2: np.ndarray) -> float:
+    """Manually compute cosine similarity between two vectors."""
+    dot_product = np.dot(vec1, vec2)
+    norm_vec1 = np.linalg.norm(vec1)
+    norm_vec2 = np.linalg.norm(vec2)
+
+    if norm_vec1 != 0 and norm_vec2 != 0:
+        return dot_product / (norm_vec1 * norm_vec2)
+    return 0.0
 
 def semantic_search(query: str, cache_dir: str, top_n: int = 5) -> List[Dict]:
     """Perform a semantic search using the precomputed TF-IDF matrix."""
@@ -119,15 +129,7 @@ def semantic_search(query: str, cache_dir: str, top_n: int = 5) -> List[Dict]:
             document_vector[indices[start_idx:end_idx]] = data[start_idx:end_idx]
 
             # Cosine similarity calculation
-            dot_product = np.dot(document_vector, query_sparse_vector)
-            norm_document = np.linalg.norm(document_vector)
-            norm_query = np.linalg.norm(query_sparse_vector)
-
-            if norm_document != 0 and norm_query != 0:
-                cosine_similarity_score = dot_product / (norm_document * norm_query)
-            else:
-                cosine_similarity_score = 0
-
+            cosine_similarity_score = cosine_similarity_manual(document_vector, query_sparse_vector)
             cosine_similarities.append((cosine_similarity_score, i))
 
         # Sort by similarity in descending order and return top_n results
