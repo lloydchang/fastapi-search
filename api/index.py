@@ -55,6 +55,47 @@ def perform_semantic_search(query: str, top_n: int = 10) -> List[Dict]:
     print(f"DEBUG: Retrieved {len(results)} results for query: '{query}'")
     return results
 
+def filter_by_sdg_tag(tag: str) -> List[Dict]:
+    """Filter cached results based on SDG tags."""
+    print(f"DEBUG: Filtering results by SDG tag: '{tag}'...")
+    document_metadata_path = os.path.join(cache_dir, 'document_metadata.npz')
+    try:
+        metadata = load_cache(document_metadata_path)
+        if metadata is None or 'documents' not in metadata:
+            print("DEBUG: Document metadata not found or corrupted.")
+            return []
+
+        # Extract documents metadata and handle different data structures
+        documents = metadata['documents']
+        if isinstance(documents, dict):
+            doc_dict = documents
+        elif hasattr(documents, 'tolist'):  # If it's a numpy array, convert to list
+            doc_list = documents.tolist()
+            doc_dict = {i: doc for i, doc in enumerate(doc_list)}
+        else:
+            raise TypeError(f"Unsupported documents structure type: {type(documents)}")
+
+        # If the tag is simply 'sdg', include all documents related to any SDGs
+        if tag.lower() == "sdg":
+            filtered_results = [
+                doc for doc in doc_dict.values() 
+                if isinstance(doc, dict) and 
+                any(sdgt in doc.get('sdg_tags', []) for sdgt in sdg_keywords.keys())
+            ]
+        else:
+            # Filter documents based on the provided SDG tag
+            filtered_results = [
+                doc for doc in doc_dict.values() 
+                if isinstance(doc, dict) and tag in doc.get('sdg_tags', [])
+            ]
+        
+        print(f"DEBUG: Found {len(filtered_results)} results for SDG tag: '{tag}'")
+        return filtered_results[:10]  # Limit results to 10
+
+    except Exception as e:
+        print(f"ERROR: Failed to filter by SDG tag '{tag}': {e}")
+        return []
+
 def presenter_search(query: str) -> List[Dict]:
     """Perform a search for TEDx talks where the presenter's name matches the query."""
     print(f"DEBUG: Performing presenter search for: '{query}'...")
@@ -107,7 +148,10 @@ def search(request: Request, query: str = Query(..., min_length=1, max_length=10
         # Normalize query if it matches SDG pattern (e.g., 'sdg 1' -> 'sdg1')
         normalized_query = normalize_sdg_query(query)
 
-        if query.lower().startswith("presenter:") or query.lower().startswith("presenter "):
+        if normalized_query.startswith("sdg"):
+            # Perform SDG tag-based search
+            results = filter_by_sdg_tag(normalized_query)
+        elif query.lower().startswith("presenter:") or query.lower().startswith("presenter "):
             # Perform presenter search when query starts with 'presenter: ' or 'presenter '
             presenter_query = query.split(":", 1)[-1].strip()  # Extract the presenter's name
             results = presenter_search(presenter_query)
