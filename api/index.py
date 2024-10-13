@@ -11,7 +11,7 @@ from fastapi import FastAPI, Query, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from functools import lru_cache
-from backend.fastapi.services.semantic_search import semantic_search
+from backend.fastapi.services.semantic_search import semantic_search  # Ensure we're using the correct import
 from backend.fastapi.cache.cache_manager_read import load_cache
 from backend.fastapi.data.sdg_keywords import sdg_keywords
 
@@ -121,15 +121,10 @@ def search(request: Request, query: str = Query(..., min_length=1, max_length=10
             # Perform standard semantic search using the LRU cache
             results = cached_semantic_search(query, top_n=100)
 
-        # Randomly select 10 results from the top 100
-        # if len(results) > 10:
-        #     results = random.sample(results, 10)
-        # else:
-        #     random.shuffle(results)  # If less than 10, just shuffle the results
-
-        # Ensure sdg_tags are included in the results
+        # Ensure sdg_tags and transcripts are included in the results
         for result in results:
             result['sdg_tags'] = result.get('sdg_tags', [])  # Add empty sdg_tags if not present
+            result['transcript'] = result.get('transcript', '')
 
     except RuntimeError as e:
         print(f"{request_uuid} [Cache Error] {e}")

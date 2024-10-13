@@ -3,6 +3,8 @@
 import os
 import numpy as np
 from typing import List, Dict
+from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 # Debugging helper function for consistent logging
 def debug_log(message: str):
@@ -41,15 +43,7 @@ def load_tfidf_components(cache_dir: str) -> Dict[str, Dict[str, np.ndarray]]:
     document_metadata = np.load(document_metadata_path, allow_pickle=True)
     debug_log(f"Document metadata keys: {document_metadata.files}")
 
-    # Adjust the key access based on actual file contents
-    if 'arr_0' in document_metadata:
-        debug_log("Loading document metadata using default key 'arr_0'.")
-        documents = document_metadata['arr_0']
-    elif 'documents' in document_metadata:
-        debug_log("Loading document metadata using custom key 'documents'.")
-        documents = document_metadata['documents']
-    else:
-        raise RuntimeError(f"Key missing in document metadata file: {document_metadata.files}")
+    documents = document_metadata['documents']
 
     debug_log(f"Loaded document metadata with {len(documents)} entries.")
     return {
@@ -104,47 +98,54 @@ def semantic_search(query: str, cache_dir: str, top_n: int = 5) -> List[Dict]:
     try:
         debug_log("Calculating cosine similarities...")
         data, indices, indptr, shape = (
-            tfidf_matrix['data'], tfidf_matrix['indices'], tfidf_matrix['indptr'], tfidf_matrix['shape']
+            tfidf_matrix["data"],
+            tfidf_matrix["indices"],
+            tfidf_matrix["indptr"],
+            tfidf_matrix["shape"]
         )
-        num_docs = shape[0]
-        similarities = []
 
-        for doc_id in range(num_docs):
-            start = indptr[doc_id]
-            end = indptr[doc_id + 1]
-            doc_indices = indices[start:end]
-            doc_data = data[start:end]
+        # Create a sparse vector representation for the query
+        query_sparse_vector = np.zeros(shape[1])
 
-            # Calculate dot product between the document vector and the query vector
-            dot_product = sum(query_vector.get(idx, 0) * doc_data[i] for i, idx in enumerate(doc_indices))
+        for index, value in query_vector.items():
+            query_sparse_vector[index] = value
 
-            # Calculate norms for cosine similarity
-            doc_norm = np.sqrt(sum(val ** 2 for val in doc_data))
-            query_norm = np.sqrt(sum(val ** 2 for val in query_vector.values()))
+        # Calculate cosine similarity manually
+        cosine_similarities = []
+        for i in range(shape[0]):
+            document_vector = np.zeros(shape[1])
+            start_idx = indptr[i]
+            end_idx = indptr[i + 1]
+            document_vector[indices[start_idx:end_idx]] = data[start_idx:end_idx]
 
-            if query_norm == 0 or doc_norm == 0:
-                similarity = 0.0
+            # Cosine similarity calculation
+            dot_product = np.dot(document_vector, query_sparse_vector)
+            norm_document = np.linalg.norm(document_vector)
+            norm_query = np.linalg.norm(query_sparse_vector)
+
+            if norm_document != 0 and norm_query != 0:
+                cosine_similarity_score = dot_product / (norm_document * norm_query)
             else:
-                similarity = dot_product / (doc_norm * query_norm)
+                cosine_similarity_score = 0
 
-            similarities.append((doc_id, similarity))
+            cosine_similarities.append((cosine_similarity_score, i))
 
-        # Sort by similarity and select the top_n results
-        similarities = sorted(similarities, key=lambda x: x[1], reverse=True)[:top_n]
-        results = [
-            {
-                'document_id': int(doc_id),
-                'similarity': float(similarity),
-                'slug': documents[doc_id]['slug'],
-                'description': documents[doc_id]['description'],
-                'presenter': documents[doc_id]['presenterDisplayName'],
-                'sdg_tags': documents[doc_id].get('sdg_tags', [])
-            } for doc_id, similarity in similarities
-        ]
+        # Sort by similarity in descending order and return top_n results
+        cosine_similarities.sort(reverse=True, key=lambda x: x[0])
+        top_results = cosine_similarities[:top_n]
 
-        debug_log(f"Search results: {results}")
+        # Retrieve corresponding documents and return results
+        results = []
+        for score, idx in top_results:
+            document = documents[idx]  # Directly access the document from the dict
+            results.append({
+                "score": score,
+                "document": document
+            })
+
+        debug_log(f"Search results returned: {len(results)}")
+        return results
+
     except Exception as e:
         debug_log(f"Error during semantic search: {e}")
-        raise RuntimeError(f"Failed to compute similarities: {e}")
-
-    return results
+        raise RuntimeError(f"Semantic search failed: {e}")
