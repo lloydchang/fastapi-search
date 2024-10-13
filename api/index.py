@@ -20,8 +20,7 @@ app = FastAPI(docs_url="/api/search/docs", redoc_url="/api/search/redoc", openap
 
 # Configure CORS
 origins = [
-    "http://localhost:3000",  # Local frontend
-    "https://nextjs-fastapi-wheat-kappa.vercel.app"  # Deployed frontend URL
+    "*"  # Any origin (not recommended for production)
 ]
 app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
