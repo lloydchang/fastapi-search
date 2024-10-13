@@ -84,7 +84,7 @@ def cosine_similarity_manual(vec1: np.ndarray, vec2: np.ndarray) -> float:
     return 0.0
 
 def semantic_search(query: str, cache_dir: str, top_n: int = 10) -> List[Dict]:
-    """Perform a semantic search using the precomputed TF-IDF matrix."""
+    """Perform a semantic search using the precomputed TF-IDF matrix with priority for semantic search, SDG, and presenter."""
     debug_log(f"Starting semantic search for query: '{query}' in directory: {cache_dir}")
     try:
         # Load the TF-IDF matrix and metadata
@@ -134,7 +134,13 @@ def semantic_search(query: str, cache_dir: str, top_n: int = 10) -> List[Dict]:
             # Check if the presenter's name matches the query and boost the score if so
             presenter_name = documents[i].get('presenterDisplayName', '').lower()
             if query.lower() in presenter_name:
-                cosine_similarity_score += 0.2  # Boost score for presenter match
+                cosine_similarity_score += 0.1  # Boost score for presenter match (Higher boost)
+
+            # Check if SDG tags match the query and boost the score if so
+            document_sdg_tags = documents[i].get('sdg_tags', [])
+            for sdg_tag in document_sdg_tags:
+                if query.lower() == sdg_tag.lower():  # If query matches the SDG tag
+                    cosine_similarity_score += 0.05  # Smaller boost for SDG match
 
             cosine_similarities.append((cosine_similarity_score, i))
 
