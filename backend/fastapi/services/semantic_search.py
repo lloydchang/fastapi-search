@@ -83,7 +83,7 @@ def cosine_similarity_manual(vec1: np.ndarray, vec2: np.ndarray) -> float:
         return dot_product / (norm_vec1 * norm_vec2)
     return 0.0
 
-def semantic_search(query: str, cache_dir: str, top_n: int = 5) -> List[Dict]:
+def semantic_search(query: str, cache_dir: str, top_n: int = 10) -> List[Dict]:
     """Perform a semantic search using the precomputed TF-IDF matrix."""
     debug_log(f"Starting semantic search for query: '{query}' in directory: {cache_dir}")
     try:
@@ -130,6 +130,12 @@ def semantic_search(query: str, cache_dir: str, top_n: int = 5) -> List[Dict]:
 
             # Cosine similarity calculation
             cosine_similarity_score = cosine_similarity_manual(document_vector, query_sparse_vector)
+
+            # Check if the presenter's name matches the query and boost the score if so
+            presenter_name = documents[i].get('presenterDisplayName', '').lower()
+            if query.lower() in presenter_name:
+                cosine_similarity_score += 0.2  # Boost score for presenter match
+
             cosine_similarities.append((cosine_similarity_score, i))
 
         # Sort by similarity in descending order and return top_n results

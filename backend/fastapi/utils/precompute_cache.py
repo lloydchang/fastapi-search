@@ -4,7 +4,7 @@ import os
 import numpy as np
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.metrics.pairwise import cosine_similarity  # Ensure this import is present
 from typing import Any, List, Dict
 from backend.fastapi.data.sdg_keywords import sdg_keywords  # Import SDG keywords
 import logging
@@ -16,15 +16,16 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger(__name__)
 
 TRANSCRIPT_CSV_PATH = 'precompute-data/transcripts.csv'  # Path to save and load transcripts
-TRANSCRIPT_CSV_PATH = 'precompute-data/transcripts.csv'  # Path to save and load transcripts
 
-def load_tedx_documents(csv_file_path: str) -> List[Dict[str, str]]:
+def load_tedx_documents(csv_file_path: str) -> (List[Dict[str, str]], pd.DataFrame):
     """Load TEDx talks from the provided CSV file and extract metadata and text content."""
     tedx_df = pd.read_csv(csv_file_path)
     transcripts_df = pd.read_csv(TRANSCRIPT_CSV_PATH) if os.path.exists(TRANSCRIPT_CSV_PATH) else pd.DataFrame(columns=['slug', 'transcript'])
 
-    if 'description' not in tedx_df.columns or 'slug' not in tedx_df.columns:
-        raise ValueError(f"Required columns 'description' or 'slug' not found in the CSV file {csv_file_path}")
+    required_columns = ['description', 'slug', 'presenterDisplayName']
+    for col in required_columns:
+        if col not in tedx_df.columns:
+            raise ValueError(f"Required column '{col}' not found in the CSV file {csv_file_path}")
     
     # Merge transcripts if already downloaded
     tedx_df = pd.merge(tedx_df, transcripts_df[['slug', 'transcript']], on='slug', how='left')
@@ -32,6 +33,7 @@ def load_tedx_documents(csv_file_path: str) -> List[Dict[str, str]]:
     # Fetch missing transcripts for individual talks
     tedx_df['transcript'] = tedx_df.apply(lambda row: fetch_transcript_if_missing(row['slug'], row['transcript']), axis=1)
 
+    # Extract the necessary document fields including presenterDisplayName
     documents = tedx_df[['slug', 'description', 'presenterDisplayName', 'transcript']].dropna().to_dict('records')
     logger.info(f"Loaded {len(documents)} TEDx documents from the CSV file, with transcripts.")
     return documents, tedx_df[['slug', 'transcript']]
@@ -112,9 +114,9 @@ def save_transcript(slug: str, transcript: str):
     logger.info(f"Transcript for {slug} saved to {TRANSCRIPT_CSV_PATH}")
 
 def create_tfidf_matrix(documents: List[Dict[str, str]]) -> Any:
-    """Create a sparse TF-IDF matrix from the combined 'description', 'slug', and 'transcript' fields."""
-    # Combine slug, description, and transcript fields to improve semantic search capabilities.
-    combined_texts = [f"{doc['slug']} {doc['description']} {doc['transcript']}" for doc in documents]
+    """Create a sparse TF-IDF matrix from the combined 'description', 'slug', 'presenterDisplayName', and 'transcript' fields."""
+    # Combine slug, description, presenter, and transcript fields to improve semantic search capabilities.
+    combined_texts = [f"{doc['slug']} {doc['description']} {doc['presenterDisplayName']} {doc['transcript']}" for doc in documents]
     vectorizer = TfidfVectorizer(stop_words='english', ngram_range=(1, 2), max_features=10000)
     tfidf_matrix = vectorizer.fit_transform(combined_texts)
     logger.info(f"TF-IDF matrix created. Shape: {tfidf_matrix.shape}")
@@ -130,12 +132,11 @@ def get_sdg_tags_for_documents(documents: List[Dict[str, str]], sdg_keywords: Di
     sdg_tfidf_matrix = vectorizer.fit_transform(sdg_keyword_list)
 
     for doc in documents:
-        # Combine the description and transcript for SDG tagging
-        combined_text = f"{doc['description']} {doc['transcript']}"
+        # Combine the description, presenter, and transcript for SDG tagging
+        combined_text = f"{doc['description']} {doc['presenterDisplayName']} {doc['transcript']}"
         combined_vector = vectorizer.transform([combined_text])
 
         # Calculate cosine similarity with SDG keywords
-        cosine_similarities = cosine_similarity(combined_vector, sdg_tfidf_matrix).flatten()
         cosine_similarities = cosine_similarity(combined_vector, sdg_tfidf_matrix).flatten()
         
         # Assign SDG tags based on high similarity
@@ -143,8 +144,10 @@ def get_sdg_tags_for_documents(documents: List[Dict[str, str]], sdg_keywords: Di
         for i in np.argsort(cosine_similarities)[::-1]:  # Sort indices in descending order
             if cosine_similarities[i] > 0.1:  # Threshold can be adjusted
                 # Identify which SDG tag this keyword belongs to
+                cumulative_keywords = 0
                 for sdg, keywords in sdg_keywords.items():
-                    if i < len(keywords):
+                    cumulative_keywords += len(keywords)
+                    if i < cumulative_keywords:
                         matched_tags.append(sdg)
                         break
             else:
@@ -153,7 +156,8 @@ def get_sdg_tags_for_documents(documents: List[Dict[str, str]], sdg_keywords: Di
         # If no tags matched, find the closest one
         if not matched_tags:
             closest_index = np.argmax(cosine_similarities)  # Find index of the highest similarity
-            closest_sdg = list(sdg_keywords.keys())[closest_index // len(list(sdg_keywords.values())[0])]  # Determine SDG tag
+            num_keywords_per_sdg = len(next(iter(sdg_keywords.values()), []))
+            closest_sdg = list(sdg_keywords.keys())[closest_index // num_keywords_per_sdg]  # Determine SDG tag
             matched_tags.append(closest_sdg)  # Assign the closest SDG tag
 
         # Deduplicate tags before adding them to the document
@@ -199,12 +203,11 @@ def precompute_cache():
     base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
     cache_dir = os.path.join(base_dir, "backend", "fastapi", "cache")
     csv_file_path = os.path.join(base_dir, "precompute-data", "tedx_talks.csv")
-    csv_file_path = os.path.join(base_dir, "precompute-data", "tedx_talks.csv")
 
     # Load TEDx documents with transcripts
     documents, transcripts_df = load_tedx_documents(csv_file_path)
 
-    # Create the TF-IDF matrix using 'slug', 'description', and 'transcript'
+    # Create the TF-IDF matrix using 'slug', 'description', 'presenterDisplayName', and 'transcript'
     tfidf_matrix, vectorizer = create_tfidf_matrix(documents)
 
     # Get SDG tags for each document based on semantic matching
