@@ -16,6 +16,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger(__name__)
 
 TRANSCRIPT_CSV_PATH = 'precompute-data/transcripts.csv'  # Path to save and load transcripts
+TRANSCRIPT_CSV_PATH = 'precompute-data/transcripts.csv'  # Path to save and load transcripts
 
 def load_tedx_documents(csv_file_path: str) -> List[Dict[str, str]]:
     """Load TEDx talks from the provided CSV file and extract metadata and text content."""
@@ -135,6 +136,7 @@ def get_sdg_tags_for_documents(documents: List[Dict[str, str]], sdg_keywords: Di
 
         # Calculate cosine similarity with SDG keywords
         cosine_similarities = cosine_similarity(combined_vector, sdg_tfidf_matrix).flatten()
+        cosine_similarities = cosine_similarity(combined_vector, sdg_tfidf_matrix).flatten()
         
         # Assign SDG tags based on high similarity
         matched_tags = []
@@ -196,6 +198,7 @@ def save_tfidf_components(tfidf_matrix, vectorizer: TfidfVectorizer, documents: 
 def precompute_cache():
     base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
     cache_dir = os.path.join(base_dir, "backend", "fastapi", "cache")
+    csv_file_path = os.path.join(base_dir, "precompute-data", "tedx_talks.csv")
     csv_file_path = os.path.join(base_dir, "precompute-data", "tedx_talks.csv")
 
     # Load TEDx documents with transcripts
