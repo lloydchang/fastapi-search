@@ -1,7 +1,7 @@
 # File: .vercelignore
 
 # Exclude the following directories
-data/
+/data/
 node_modules/
 venv/
 __pycache__/
