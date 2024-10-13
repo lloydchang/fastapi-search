@@ -1,0 +1,14 @@
+# File: .vercelignore
+
+# Exclude the following directories
+data/
+node_modules/
+venv/
+__pycache__/
+logs/
+tests/
+some_large_directory/
+
+# Exclude specific files
+*.log
+*.md
