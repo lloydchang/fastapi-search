@@ -4,10 +4,12 @@ import time
 import uuid
 import os
 import re
+import random  # Import random for shuffling and sampling
 from pathlib import Path
 from typing import List, Dict
 from fastapi import FastAPI, Query, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from functools import lru_cache
 from backend.fastapi.services.semantic_search import semantic_search  # Ensure we're using the correct import
 from backend.fastapi.cache.cache_manager_read import load_cache
@@ -38,12 +40,12 @@ def load_vocabulary(cache_dir: str) -> Dict[str, int]:
 vocabulary = load_vocabulary(cache_dir)
 
 @lru_cache(maxsize=1000)  # Increased cache size for better performance
-def cached_semantic_search(query: str, top_n: int = 10) -> List[Dict]:
+def cached_semantic_search(query: str, top_n: int = 100) -> List[Dict]:
     """Cached wrapper for performing a semantic search."""
     print(f"DEBUG: Using LRU cache for query: '{query}'")
     return perform_semantic_search(query, top_n)
 
-def perform_semantic_search(query: str, top_n: int = 10) -> List[Dict]:
+def perform_semantic_search(query: str, top_n: int = 100) -> List[Dict]:
     """Perform a new semantic search for the given query and return the top `top_n` results."""
     print(f"DEBUG: Performing semantic search for query: '{query}'...")
     results = semantic_search(query, cache_dir, top_n=top_n)
@@ -69,64 +71,28 @@ def filter_by_sdg_tag(tag: str) -> List[Dict]:
         documents = metadata['documents']
         if isinstance(documents, dict):
             doc_dict = documents
-        elif hasattr(documents, 'tolist'):  # If it's a numpy array, convert to list
+        elif hasattr(documents, 'tolist'):  # If it's a numpy array, convert it to list
             doc_list = documents.tolist()
             doc_dict = {i: doc for i, doc in enumerate(doc_list)}
         else:
             raise TypeError(f"Unsupported documents structure type: {type(documents)}")
 
-        # If the tag is simply 'sdg', include all documents related to any SDGs
+        # If the tag is simply 'sdg', we want to include all documents related to SDGs
         if tag.lower() == "sdg":
             filtered_results = [
-                doc for doc in doc_dict.values() 
-                if isinstance(doc, dict) and 
-                any(sdgt in doc.get('sdg_tags', []) for sdgt in sdg_keywords.keys())
+                doc for doc in doc_dict.values() if isinstance(doc, dict) and any(sdgt in doc.get('sdg_tags', []) for sdgt in sdg_keywords.keys())
             ]
         else:
             # Filter documents based on the provided SDG tag
             filtered_results = [
-                doc for doc in doc_dict.values() 
-                if isinstance(doc, dict) and tag in doc.get('sdg_tags', [])
+                doc for doc in doc_dict.values() if isinstance(doc, dict) and tag in doc.get('sdg_tags', [])
             ]
         
         print(f"DEBUG: Found {len(filtered_results)} results for SDG tag: '{tag}'")
-        return filtered_results[:10]  # Limit results to 10
+        return filtered_results[:100]  # Change the limit to 100 to be consistent with `top_n` update
 
     except Exception as e:
         print(f"ERROR: Failed to filter by SDG tag '{tag}': {e}")
-        return []
-
-def presenter_search(query: str) -> List[Dict]:
-    """Perform a search for TEDx talks where the presenter's name matches the query."""
-    print(f"DEBUG: Performing presenter search for: '{query}'...")
-    document_metadata_path = os.path.join(cache_dir, 'document_metadata.npz')
-
-    try:
-        metadata = load_cache(document_metadata_path)
-        if metadata is None or 'documents' not in metadata:
-            print("DEBUG: Document metadata not found or corrupted.")
-            return []
-
-        # Extract documents metadata
-        documents = metadata['documents']
-        if isinstance(documents, dict):
-            doc_dict = documents
-        elif hasattr(documents, 'tolist'):  # If it's a numpy array, convert to list
-            doc_list = documents.tolist()
-            doc_dict = {i: doc for i, doc in enumerate(doc_list)}
-        else:
-            raise TypeError(f"Unsupported documents structure type: {type(documents)}")
-
-        # Perform exact or partial matching in presenterDisplayName
-        filtered_results = [
-            doc for doc in doc_dict.values() 
-            if isinstance(doc, dict) and query.lower() in doc.get('presenterDisplayName', '').lower()
-        ]
-        
-        print(f"DEBUG: Found {len(filtered_results)} results for presenter search: '{query}'")
-        return filtered_results[:10]  # Limit results to 10
-    except Exception as e:
-        print(f"ERROR: Failed to perform presenter search: {e}")
         return []
 
 def normalize_sdg_query(query: str) -> str:
@@ -139,7 +105,7 @@ def normalize_sdg_query(query: str) -> str:
 
 @app.get("/api/search")
 def search(request: Request, query: str = Query(..., min_length=1, max_length=100)) -> Dict:
-    """Handle the search endpoint by performing semantic search, SDG tag search, or presenter search."""
+    """Handle the search endpoint by performing either a semantic search or an SDG tag search."""
     request_uuid = uuid.uuid4()
     search_request_start_time = time.time()
     print(f"{request_uuid} [Search Endpoint Handling] Starting search request processing for query: '{query}'...")
@@ -151,21 +117,9 @@ def search(request: Request, query: str = Query(..., min_length=1, max_length=10
         if normalized_query.startswith("sdg"):
             # Perform SDG tag-based search
             results = filter_by_sdg_tag(normalized_query)
-        elif query.lower().startswith("presenter:") or query.lower().startswith("presenter "):
-            # Perform presenter search when query starts with 'presenter: ' or 'presenter '
-            presenter_query = query.split(":", 1)[-1].strip()  # Extract the presenter's name
-            results = presenter_search(presenter_query)
         else:
             # Perform standard semantic search using the LRU cache
-            results = cached_semantic_search(query, top_n=10)
-
-            # Boost presenter matches if query appears to be a name
-            presenter_matches = presenter_search(query)
-            # Add presenter matches to the results and rank them higher, ensuring no duplicates
-            results = presenter_matches + [res for res in results if res not in presenter_matches]
-
-            # Limit the total results to 10
-            results = results[:10]
+            results = cached_semantic_search(query, top_n=100)
 
         # Ensure sdg_tags and transcripts are included in the results
         for result in results:
