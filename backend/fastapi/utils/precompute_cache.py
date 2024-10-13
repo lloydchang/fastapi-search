@@ -15,7 +15,7 @@ import re  # For regex extraction of transcripts from HTML
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger(__name__)
 
-TRANSCRIPT_CSV_PATH = 'data/transcripts.csv'  # Path to save and load transcripts
+TRANSCRIPT_CSV_PATH = 'precompute-data/transcripts.csv'  # Path to save and load transcripts
 
 def load_tedx_documents(csv_file_path: str) -> List[Dict[str, str]]:
     """Load TEDx talks from the provided CSV file and extract metadata and text content."""
@@ -129,9 +129,12 @@ def get_sdg_tags_for_documents(documents: List[Dict[str, str]], sdg_keywords: Di
     sdg_tfidf_matrix = vectorizer.fit_transform(sdg_keyword_list)
 
     for doc in documents:
-        description_vector = vectorizer.transform([doc['description']])
+        # Combine the description and transcript for SDG tagging
+        combined_text = f"{doc['description']} {doc['transcript']}"
+        combined_vector = vectorizer.transform([combined_text])
+
         # Calculate cosine similarity with SDG keywords
-        cosine_similarities = cosine_similarity(description_vector, sdg_tfidf_matrix).flatten()
+        cosine_similarities = cosine_similarity(combined_vector, sdg_tfidf_matrix).flatten()
         
         # Assign SDG tags based on high similarity
         matched_tags = []
@@ -151,8 +154,9 @@ def get_sdg_tags_for_documents(documents: List[Dict[str, str]], sdg_keywords: Di
             closest_sdg = list(sdg_keywords.keys())[closest_index // len(list(sdg_keywords.values())[0])]  # Determine SDG tag
             matched_tags.append(closest_sdg)  # Assign the closest SDG tag
 
-        doc['sdg_tags'] = matched_tags  # Add matched SDG tags to the document
-        logger.info(f"Document '{doc['slug']}' assigned SDG tags: {matched_tags}")  # Log the assigned tags
+        # Deduplicate tags before adding them to the document
+        doc['sdg_tags'] = list(set(matched_tags))  # Remove duplicates
+        logger.info(f"Document '{doc['slug']}' assigned SDG tags: {doc['sdg_tags']}")  # Log the assigned tags
 
 def save_sparse_matrix(tfidf_matrix, cache_dir: str):
     """Save sparse matrix in a numpy-compatible format."""
@@ -192,7 +196,7 @@ def save_tfidf_components(tfidf_matrix, vectorizer: TfidfVectorizer, documents: 
 def precompute_cache():
     base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
     cache_dir = os.path.join(base_dir, "backend", "fastapi", "cache")
-    csv_file_path = os.path.join(base_dir, "data", "tedx_talks.csv")
+    csv_file_path = os.path.join(base_dir, "precompute-data", "tedx_talks.csv")
 
     # Load TEDx documents with transcripts
     documents, transcripts_df = load_tedx_documents(csv_file_path)
