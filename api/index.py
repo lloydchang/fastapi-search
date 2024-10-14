@@ -200,8 +200,7 @@ def search(request: Request, query: str = Query(..., min_length=1, max_length=10
             semantic_results = filter_out_null_transcripts(semantic_results)
 
             # Combine SDG and semantic results
-            results = rank_and_combine_results(sdg_results, semantic_results)
-            results = results[:10]
+            results = rank_and_combine_results(semantic_results, sdg_results)
 
         else:
             # Run presenter and semantic searches in parallel
@@ -227,7 +226,6 @@ def search(request: Request, query: str = Query(..., min_length=1, max_length=10
 
             # Combine and rank results
             results = rank_and_combine_results(presenter_results, semantic_results)
-            results = results[:10]
 
         # Ensure 'sdg_tags' and 'transcript' keys exist
         for result in results:
