@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import lru_cache
 from backend.fastapi.services.semantic_search import semantic_search
 from backend.fastapi.cache.cache_manager_read import load_cache
-from backend.fastapi.data.sdg_keywords import sdg_keywords
+from backend.fastapi.data.sdg_keywords import sdg_keywords  # Ensure this includes 'sdg1' to 'sdg17'
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -104,13 +104,14 @@ def filter_by_sdg_tag_from_cache(tag: str) -> List[Dict[str, Any]]:
         filtered_results = []
         for doc in doc_dict.values():
             sdg_tags = doc.get('sdg_tags', [])
+            sdg_tags_lower = [sdg_tag.lower() for sdg_tag in sdg_tags]
             if tag.lower() == "sdg":
                 # Include all documents related to any SDG
-                if any(sdgt in sdg_tags for sdgt in sdg_keywords.keys()):
+                if any(sdgt.lower() in sdg_tags_lower for sdgt in sdg_keywords.keys()):
                     filtered_results.append({'document': doc})
             else:
-                # Include documents that have the specific SDG tag
-                if tag in sdg_tags:
+                # Ensure exact match of SDG tag
+                if tag.lower() in sdg_tags_lower:
                     filtered_results.append({'document': doc})
 
         print(f"DEBUG: Found {len(filtered_results)} results for SDG tag: '{tag}'")
@@ -201,7 +202,7 @@ def search(request: Request, query: str = Query(..., min_length=1, max_length=10
             sdg_results = filter_out_null_transcripts(sdg_results)
 
             # Also perform semantic search with augmented query
-            sdg_keywords_list = sdg_keywords.get(sdg_tag, [])
+            sdg_keywords_list = sdg_keywords.get(sdg_tag.lower(), [])
             augmented_query = f"{query} {' '.join(sdg_keywords_list)}"
 
             # Run semantic search
