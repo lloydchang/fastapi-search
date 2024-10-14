@@ -84,7 +84,6 @@ def augment_query_with_sdg_keywords(sdg_number: int, original_query: str) -> str
     """Augment the original query with keywords related to the extracted SDG."""
     sdg_key = f"sdg{sdg_number}"
     if sdg_key in sdg_keywords:
-        # Combine the original query with the SDG keywords for a richer search
         keyword_string = " ".join(sdg_keywords[sdg_key])
         augmented_query = f"{original_query} {keyword_string}"
         return augmented_query
@@ -98,26 +97,47 @@ def rank_and_combine_results(semantic_results: List[Dict], tag_results: List[Dic
         return (has_matching_tag, result.get('score', 0))
     return sorted(combined_results, key=rank_key, reverse=True)
 
+def filter_by_presenter(presenter_name: str) -> List[Dict]:
+    """Filter results based on presenter names."""
+    document_metadata_path = os.path.join(cache_dir, 'document_metadata.npz')
+    try:
+        metadata = load_cache(document_metadata_path)
+        if metadata is None or 'documents' not in metadata:
+            return []
+        documents = metadata['documents']
+        if isinstance(documents, dict):
+            doc_dict = documents
+        elif hasattr(documents, 'tolist'):
+            doc_list = documents.tolist()
+            doc_dict = {i: doc for i, doc in enumerate(doc_list)}
+        else:
+            raise TypeError(f"Unsupported documents structure type: {type(documents)}")
+
+        filtered_results = [
+            doc for doc in doc_dict.values()
+            if presenter_name.lower() in doc.get('presenterDisplayName', '').lower()
+        ]
+        return filtered_results[:10]
+    except Exception as e:
+        print(f"ERROR: Failed to filter by presenter name '{presenter_name}': {e}")
+        return []
+
 @app.get("/api/search")
 def search(request: Request, query: str = Query(..., min_length=1, max_length=100)) -> Dict:
-    """Handle the search endpoint by performing either a semantic search or an SDG tag search."""
+    """Handle the search endpoint by performing either a semantic search or a presenter lookup."""
     request_uuid = uuid.uuid4()
     search_request_start_time = time.time()
     print(f"{request_uuid} [Search Endpoint Handling] Starting search request for query: '{query}'...")
 
     try:
-        normalized_query = normalize_sdg_query(query)
-        sdg_number = extract_sdg_number(query)
+        # Check if the query matches a presenter's name
+        presenter_results = filter_by_presenter(query)
 
-        if sdg_number:
-            # Augment the query with SDG-related keywords
-            augmented_query = augment_query_with_sdg_keywords(sdg_number, query)
-            semantic_results = cached_semantic_search(augmented_query, top_n=100)
-            tag_results = filter_by_sdg_tag(f"sdg{sdg_number}")
-            results = rank_and_combine_results(semantic_results, tag_results, sdg_number)
-        elif normalized_query.startswith("sdg"):
-            results = filter_by_sdg_tag(normalized_query)
+        if presenter_results:
+            # If we found matching presenter results, return those
+            results = presenter_results
         else:
+            # Otherwise, perform a semantic search
             results = cached_semantic_search(query, top_n=10)
 
         # Ensure sdg_tags and transcripts are included in the results
