@@ -89,13 +89,10 @@ def augment_query_with_sdg_keywords(sdg_number: int, original_query: str) -> str
         return augmented_query
     return original_query
 
-def rank_and_combine_results(semantic_results: List[Dict], tag_results: List[Dict], sdg_number: int) -> List[Dict]:
-    """Combine and rank results, prioritizing those with the correct SDG tag."""
-    combined_results = semantic_results + tag_results
-    def rank_key(result):
-        has_matching_tag = f"sdg{sdg_number}" in result.get('sdg_tags', [])
-        return (has_matching_tag, result.get('score', 0))
-    return sorted(combined_results, key=rank_key, reverse=True)
+def rank_and_combine_results(presenter_results: List[Dict], semantic_results: List[Dict]) -> List[Dict]:
+    """Combine and rank results, prioritizing presenter results first, followed by semantic matches."""
+    combined_results = presenter_results + [result for result in semantic_results if result not in presenter_results]
+    return combined_results
 
 def filter_by_presenter(presenter_name: str) -> List[Dict]:
     """Filter results based on presenter names."""
@@ -124,21 +121,20 @@ def filter_by_presenter(presenter_name: str) -> List[Dict]:
 
 @app.get("/api/search")
 def search(request: Request, query: str = Query(..., min_length=1, max_length=100)) -> Dict:
-    """Handle the search endpoint by performing either a semantic search or a presenter lookup."""
+    """Handle the search endpoint by performing both a presenter lookup and a semantic search."""
     request_uuid = uuid.uuid4()
     search_request_start_time = time.time()
     print(f"{request_uuid} [Search Endpoint Handling] Starting search request for query: '{query}'...")
 
     try:
-        # Check if the query matches a presenter's name
+        # Step 1: Search for presenter-related results
         presenter_results = filter_by_presenter(query)
 
-        if presenter_results:
-            # If we found matching presenter results, return those
-            results = presenter_results
-        else:
-            # Otherwise, perform a semantic search
-            results = cached_semantic_search(query, top_n=10)
+        # Step 2: Perform semantic search in parallel
+        semantic_results = cached_semantic_search(query, top_n=10)
+
+        # Step 3: Combine and rank results (presenter results first, followed by semantic results)
+        results = rank_and_combine_results(presenter_results, semantic_results)
 
         # Ensure sdg_tags and transcripts are included in the results
         for result in results:
