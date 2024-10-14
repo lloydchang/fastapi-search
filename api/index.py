@@ -83,21 +83,9 @@ def normalize_sdg_query(query: str) -> str:
         return re.sub(r"\s+", "", query.lower())  # Remove spaces and convert to lowercase
     return query
 
-def remove_duplicates(results: List[Dict], key: str = "id") -> List[Dict]:
-    """Remove duplicate documents based on a unique key (e.g., 'id' or 'title')."""
-    seen = set()
-    unique_results = []
-    for result in results:
-        identifier = result.get(key)
-        if identifier and identifier not in seen:
-            seen.add(identifier)
-            unique_results.append(result)
-    print(f"DEBUG: Reduced results from {len(results)} to {len(unique_results)} after removing duplicates.")
-    return unique_results
-
 @app.get("/api/search")
 def search(request: Request, query: str = Query(..., min_length=1, max_length=100)) -> Dict:
-    """Handle the search endpoint by performing a semantic search first, then optionally filter by SDG tags, and remove duplicates."""
+    """Handle the search endpoint by performing a semantic search first, then optionally filter by SDG tags."""
     request_uuid = uuid.uuid4()
     search_request_start_time = time.time()
     print(f"{request_uuid} [Search Endpoint Handling] Starting search request processing for query: '{query}'...")
@@ -118,10 +106,7 @@ def search(request: Request, query: str = Query(..., min_length=1, max_length=10
             result['sdg_tags'] = result.get('sdg_tags', [])  # Add empty sdg_tags if not present
             result['transcript'] = result.get('transcript', '')
 
-        # Remove duplicate results based on a unique identifier (e.g., 'id')
-        results = remove_duplicates(results, key="id")
-
-        # Limit to top 10 results after filtering and deduplication
+        # Limit to top 10 results after filtering
         results = results[:10]
 
     except RuntimeError as e:
