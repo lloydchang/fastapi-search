@@ -77,16 +77,11 @@ def filter_by_sdg_tag(tag: str) -> List[Dict]:
         else:
             raise TypeError(f"Unsupported documents structure type: {type(documents)}")
 
-        # If the tag is simply 'sdg', we want to include all documents related to SDGs
-        if tag.lower() == "sdg":
-            filtered_results = [
-                doc for doc in doc_dict.values() if isinstance(doc, dict) and any(sdgt in doc.get('sdg_tags', []) for sdgt in sdg_keywords.keys())
-            ]
-        else:
-            # Filter documents based on the provided SDG tag
-            filtered_results = [
-                doc for doc in doc_dict.values() if isinstance(doc, dict) and tag in doc.get('sdg_tags', [])
-            ]
+        # Filter documents based on the provided SDG tag (exact match)
+        filtered_results = [
+            doc for doc in doc_dict.values()
+            if isinstance(doc, dict) and tag in doc.get('sdg_tags', [])
+        ]
         
         print(f"DEBUG: Found {len(filtered_results)} results for SDG tag: '{tag}'")
         return filtered_results[:100]  # Change the limit to 100 to be consistent with `top_n` update
