@@ -40,22 +40,22 @@ vocabulary = load_vocabulary(cache_dir)
 @lru_cache(maxsize=0)
 def cached_semantic_search(query: str, top_n: int = 10) -> List[Dict]:
     """Cached wrapper for performing a semantic search."""
-    print(f"DEBUG: Using LRU cache for query: '{query}'")
+    # print(f"DEBUG: Using LRU cache for query: '{query}'")
     return perform_semantic_search(query, top_n)
 
 def perform_semantic_search(query: str, top_n: int = 10) -> List[Dict]:
     """Perform a new semantic search for the given query and return the top `top_n` results."""
-    print(f"DEBUG: Performing semantic search for query: '{query}'...")
+    # print(f"DEBUG: Performing semantic search for query: '{query}'...")
     results = semantic_search(query, cache_dir, top_n=top_n)
     if results is None:
-        print(f"DEBUG: No results returned for query: '{query}'.")
+        # print(f"DEBUG: No results returned for query: '{query}'.")
         return []
-    print(f"DEBUG: Retrieved {len(results)} results for query: '{query}'")
+    # print(f"DEBUG: Retrieved {len(results)} results for query: '{query}'")
     return results
 
 def filter_by_sdg_tag(tag: str) -> List[Dict]:
     """Filter cached results based on SDG tags."""
-    print(f"DEBUG: Filtering results by SDG tag: '{tag}'...")
+    # print(f"DEBUG: Filtering results by SDG tag: '{tag}'...")
     document_metadata_path = os.path.join(cache_dir, 'document_metadata.npz')
     try:
         metadata = load_cache(document_metadata_path)
@@ -73,10 +73,10 @@ def filter_by_sdg_tag(tag: str) -> List[Dict]:
         filtered_results = []
         for doc in doc_dict.values():
             sdg_tags = doc.get('sdg_tags', [])
-            print(f"DEBUG: Document '{doc.get('slug', 'unknown')}' SDG tags: {sdg_tags}")
+            # print(f"DEBUG: Document '{doc.get('slug', 'unknown')}' SDG tags: {sdg_tags}")
             if isinstance(doc, dict) and tag in sdg_tags:
                 filtered_results.append(doc)
-        print(f"DEBUG: Found {len(filtered_results)} results for SDG tag: '{tag}'")
+        # print(f"DEBUG: Found {len(filtered_results)} results for SDG tag: '{tag}'")
         return filtered_results[:10]
     except Exception as e:
         print(f"ERROR: Failed to filter by SDG tag '{tag}': {e}")
