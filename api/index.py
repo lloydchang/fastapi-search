@@ -37,13 +37,13 @@ def load_vocabulary(cache_dir: str) -> Dict[str, int]:
 # Load vocabulary on startup
 vocabulary = load_vocabulary(cache_dir)
 
-@lru_cache(maxsize=1000)
-def cached_semantic_search(query: str, top_n: int = 100) -> List[Dict]:
+@lru_cache(maxsize=0)
+def cached_semantic_search(query: str, top_n: int = 10) -> List[Dict]:
     """Cached wrapper for performing a semantic search."""
     print(f"DEBUG: Using LRU cache for query: '{query}'")
     return perform_semantic_search(query, top_n)
 
-def perform_semantic_search(query: str, top_n: int = 100) -> List[Dict]:
+def perform_semantic_search(query: str, top_n: int = 10) -> List[Dict]:
     """Perform a new semantic search for the given query and return the top `top_n` results."""
     print(f"DEBUG: Performing semantic search for query: '{query}'...")
     results = semantic_search(query, cache_dir, top_n=top_n)
@@ -77,7 +77,7 @@ def filter_by_sdg_tag(tag: str) -> List[Dict]:
             if isinstance(doc, dict) and tag in sdg_tags:
                 filtered_results.append(doc)
         print(f"DEBUG: Found {len(filtered_results)} results for SDG tag: '{tag}'")
-        return filtered_results[:100]
+        return filtered_results[:10]
     except Exception as e:
         print(f"ERROR: Failed to filter by SDG tag '{tag}': {e}")
         return []
@@ -123,7 +123,7 @@ def search(request: Request, query: str = Query(..., min_length=1, max_length=10
             results = filter_by_sdg_tag(normalized_query)
         else:
             # Perform standard semantic search using the LRU cache
-            results = cached_semantic_search(query, top_n=100)
+            results = cached_semantic_search(query, top_n=10)
 
         # Ensure sdg_tags and transcripts are included in the results
         for result in results:
