@@ -4,6 +4,7 @@ import time
 import uuid
 import os
 import re
+import asyncio  # For parallel execution
 from pathlib import Path
 from typing import List, Dict, Optional
 from fastapi import FastAPI, Query, HTTPException, Request
@@ -66,11 +67,6 @@ def extract_sdg_number(query: str) -> Optional[int]:
     match = re.search(r"SDG\s*(\d{1,2})", query, re.IGNORECASE)
     return int(match.group(1)) if match else None
 
-def rank_and_combine_results(presenter_results: List[Dict], semantic_results: List[Dict]) -> List[Dict]:
-    """Combine and rank results, prioritizing presenter results first, followed by semantic matches."""
-    combined_results = presenter_results + [result for result in semantic_results if result not in presenter_results]
-    return combined_results
-
 def filter_by_presenter(presenter_name: str) -> List[Dict]:
     """Filter results based on presenter names."""
     document_metadata_path = os.path.join(cache_dir, 'document_metadata.npz')
@@ -96,39 +92,79 @@ def filter_by_presenter(presenter_name: str) -> List[Dict]:
         print(f"ERROR: Failed to filter by presenter name '{presenter_name}': {e}")
         return []
 
+def filter_by_sdg_keywords(query: str) -> List[Dict]:
+    """Perform SDG tag-based search using keywords mapped from sdg_keywords."""
+    document_metadata_path = os.path.join(cache_dir, 'document_metadata.npz')
+    try:
+        metadata = load_cache(document_metadata_path)
+        if metadata is None or 'documents' not in metadata:
+            return []
+        documents = metadata['documents']
+        if isinstance(documents, dict):
+            doc_dict = documents
+        elif hasattr(documents, 'tolist'):
+            doc_list = documents.tolist()
+            doc_dict = {i: doc for i, doc in enumerate(doc_list)}
+        else:
+            raise TypeError(f"Unsupported documents structure type: {type(documents)}")
+        
+        sdg_number = extract_sdg_number(query)
+        if not sdg_number or f"sdg{sdg_number}" not in sdg_keywords:
+            return []
+        keywords = sdg_keywords[f"sdg{sdg_number}"]
+
+        # Filter documents based on SDG keywords
+        filtered_results = [
+            doc for doc in doc_dict.values()
+            if any(keyword.lower() in doc.get('transcript', '').lower() for keyword in keywords)
+        ]
+        return filtered_results[:10]
+    except Exception as e:
+        print(f"ERROR: Failed to filter by SDG keywords: {e}")
+        return []
+
+def rank_and_combine_results(presenter_results: List[Dict], semantic_results: List[Dict], sdg_results: List[Dict]) -> List[Dict]:
+    """Combine and rank results, giving preference to presenter results first, followed by SDG and semantic matches."""
+    combined_results = presenter_results + [result for result in sdg_results if result not in presenter_results] + [result for result in semantic_results if result not in presenter_results and result not in sdg_results]
+    return combined_results
+
 @app.get("/api/search")
-def search(request: Request, query: str = Query(..., min_length=1, max_length=100)) -> Dict:
-    """Handle the search endpoint by performing both a presenter lookup and a semantic search."""
+async def search(request: Request, query: str = Query(..., min_length=1, max_length=100)) -> Dict:
+    """Handle the search endpoint by performing presenter lookup, semantic search, and SDG keyword-based search."""
     request_uuid = uuid.uuid4()
     search_request_start_time = time.time()
     print(f"{request_uuid} [Search Endpoint Handling] Starting search request for query: '{query}'...")
 
     try:
-        # Step 1: Search for presenter-related results
-        presenter_results = filter_by_presenter(query)
+        # Step 1: Run presenter search, semantic search, and SDG keyword-based search in parallel
+        presenter_task = asyncio.create_task(filter_by_presenter(query))
+        semantic_task = asyncio.create_task(cached_semantic_search(query, top_n=10))
+        sdg_task = asyncio.create_task(filter_by_sdg_keywords(query))
 
-        # Step 2: Perform semantic search in parallel
-        semantic_results = cached_semantic_search(query, top_n=10)
+        # Await results of all tasks
+        presenter_results, semantic_results, sdg_results = await asyncio.gather(presenter_task, semantic_task, sdg_task)
 
-        # Step 3: Filter out results with null transcripts from both presenter and semantic search results
+        # Step 2: Filter out results with null transcripts from all search results
         presenter_results = filter_out_null_transcripts(presenter_results)
         semantic_results = filter_out_null_transcripts(semantic_results)
+        sdg_results = filter_out_null_transcripts(sdg_results)
 
-        # Step 4: If query is SDG-related, filter by SDG tag
+        # Step 3: If query is SDG-related, filter by SDG tag
         sdg_number = extract_sdg_number(query)
         if sdg_number:
             sdg_tag = f"sdg{sdg_number}"
             presenter_results = filter_by_sdg_tag(presenter_results, sdg_tag)
             semantic_results = filter_by_sdg_tag(semantic_results, sdg_tag)
 
-        # Step 5: Combine and rank results (presenter results first, followed by semantic results)
-        results = rank_and_combine_results(presenter_results, semantic_results)
+        # Step 4: Combine and rank results (presenter results first, followed by SDG and semantic results)
+        results = rank_and_combine_results(presenter_results, semantic_results, sdg_results)
 
         # Ensure sdg_tags and transcripts are included in the results
         for result in results:
             result['sdg_tags'] = result.get('sdg_tags', [])
             result['transcript'] = result.get('transcript', '')
 
+        # Limit results to top 10
         results = results[:10]
 
     except RuntimeError as e:
