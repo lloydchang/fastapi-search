@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import List, Dict, Optional
 from fastapi import FastAPI, Query, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from functools import lru_cache
 from backend.fastapi.services.semantic_search import semantic_search
 from backend.fastapi.cache.cache_manager_read import load_cache
@@ -46,13 +47,26 @@ def perform_semantic_search(query: str, top_n: int = 10) -> List[Dict]:
         return []
     return results
 
-def filter_out_null_transcripts(results: List[Dict]) -> List[Dict]:
-    """Filter out results that have null or empty transcripts."""
-    return [result for result in results if result.get('transcript')]
-
-def filter_by_sdg_tag(results: List[Dict], tag: str) -> List[Dict]:
+def filter_by_sdg_tag(tag: str) -> List[Dict]:
     """Filter cached results based on SDG tags."""
-    return [result for result in results if tag in result.get('sdg_tags', [])]
+    document_metadata_path = os.path.join(cache_dir, 'document_metadata.npz')
+    try:
+        metadata = load_cache(document_metadata_path)
+        if metadata is None or 'documents' not in metadata:
+            return []
+        documents = metadata['documents']
+        if isinstance(documents, dict):
+            doc_dict = documents
+        elif hasattr(documents, 'tolist'):
+            doc_list = documents.tolist()
+            doc_dict = {i: doc for i, doc in enumerate(doc_list)}
+        else:
+            raise TypeError(f"Unsupported documents structure type: {type(documents)}")
+        filtered_results = [doc for doc in doc_dict.values() if tag in doc.get('sdg_tags', [])]
+        return filtered_results[:10]
+    except Exception as e:
+        print(f"ERROR: Failed to filter by SDG tag '{tag}': {e}")
+        return []
 
 def normalize_sdg_query(query: str) -> str:
     """Normalize the query if it matches the SDG pattern: 'sdg', one or more spaces, and a digit."""
@@ -65,6 +79,15 @@ def extract_sdg_number(query: str) -> Optional[int]:
     """Extract SDG number from queries like "SDG 7" or "SDG 7: Affordable and Clean Energy"."""
     match = re.search(r"SDG\s*(\d{1,2})", query, re.IGNORECASE)
     return int(match.group(1)) if match else None
+
+def augment_query_with_sdg_keywords(sdg_number: int, original_query: str) -> str:
+    """Augment the original query with keywords related to the extracted SDG."""
+    sdg_key = f"sdg{sdg_number}"
+    if sdg_key in sdg_keywords:
+        keyword_string = " ".join(sdg_keywords[sdg_key])
+        augmented_query = f"{original_query} {keyword_string}"
+        return augmented_query
+    return original_query
 
 def rank_and_combine_results(presenter_results: List[Dict], semantic_results: List[Dict]) -> List[Dict]:
     """Combine and rank results, prioritizing presenter results first, followed by semantic matches."""
@@ -110,18 +133,7 @@ def search(request: Request, query: str = Query(..., min_length=1, max_length=10
         # Step 2: Perform semantic search in parallel
         semantic_results = cached_semantic_search(query, top_n=10)
 
-        # Step 3: Filter out results with null transcripts from both presenter and semantic search results
-        presenter_results = filter_out_null_transcripts(presenter_results)
-        semantic_results = filter_out_null_transcripts(semantic_results)
-
-        # Step 4: If query is SDG-related, filter by SDG tag
-        sdg_number = extract_sdg_number(query)
-        if sdg_number:
-            sdg_tag = f"sdg{sdg_number}"
-            presenter_results = filter_by_sdg_tag(presenter_results, sdg_tag)
-            semantic_results = filter_by_sdg_tag(semantic_results, sdg_tag)
-
-        # Step 5: Combine and rank results (presenter results first, followed by semantic results)
+        # Step 3: Combine and rank results (presenter results first, followed by semantic results)
         results = rank_and_combine_results(presenter_results, semantic_results)
 
         # Ensure sdg_tags and transcripts are included in the results
