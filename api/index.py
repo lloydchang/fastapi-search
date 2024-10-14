@@ -10,9 +10,9 @@ from fastapi import FastAPI, Query, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import lru_cache
-from backend.fastapi.services.semantic_search import semantic_search  # Ensure correct import
+from backend.fastapi.services.semantic_search import semantic_search
 from backend.fastapi.cache.cache_manager_read import load_cache
-from backend.fastapi.data.sdg_keywords import sdg_keywords  # SDG keywords mapping
+from backend.fastapi.data.sdg_keywords import sdg_keywords
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -75,29 +75,35 @@ def filter_by_sdg_tag_from_cache(tag: str) -> List[Dict[str, Any]]:
     print(f"DEBUG: Filtering results by SDG tag: '{tag}'...")
     document_metadata_path = os.path.join(cache_dir, 'document_metadata.npz')
     try:
+        # Load documents from cache
         metadata = load_cache(document_metadata_path)
         if not metadata or 'documents' not in metadata:
             print("DEBUG: Document metadata not found or corrupted.")
             return []
         documents = metadata['documents']
+
+        # Convert documents to a consistent dictionary format
         if isinstance(documents, dict):
             doc_dict = documents
         elif hasattr(documents, 'tolist'):
             doc_list = documents.tolist()
-            doc_dict = {i: {'document': doc} for i, doc in enumerate(doc_list)}
+            doc_dict = {i: doc for i, doc in enumerate(doc_list)}
         else:
             raise TypeError(f"Unsupported document structure type: {type(documents)}")
 
-        if tag.lower() == "sdg":
-            filtered_results = [
-                {'document': doc} for doc in doc_dict.values()
-                if any(sdgt in doc.get('sdg_tags', []) for sdgt in sdg_keywords.keys())
-            ]
-        else:
-            filtered_results = [
-                {'document': doc} for doc in doc_dict.values()
-                if tag in doc.get('sdg_tags', [])
-            ]
+        # Filter documents based on SDG tags
+        filtered_results = []
+        for doc in doc_dict.values():
+            sdg_tags = doc.get('sdg_tags', [])
+            if tag.lower() == "sdg":
+                # Include all documents related to any SDG
+                if any(sdgt in sdg_tags for sdgt in sdg_keywords.keys()):
+                    filtered_results.append({'document': doc})
+            else:
+                # Include documents that have the specific SDG tag
+                if tag in sdg_tags:
+                    filtered_results.append({'document': doc})
+
         print(f"DEBUG: Found {len(filtered_results)} results for SDG tag: '{tag}'")
         return filtered_results[:100]
     except Exception as e:
@@ -120,22 +126,29 @@ def filter_by_presenter(presenter_name: str) -> List[Dict[str, Any]]:
     """Filter results based on presenter name."""
     document_metadata_path = os.path.join(cache_dir, 'document_metadata.npz')
     try:
+        # Load documents from cache
         metadata = load_cache(document_metadata_path)
         if not metadata or 'documents' not in metadata:
             return []
         documents = metadata['documents']
+
+        # Convert documents to a consistent dictionary format
         if isinstance(documents, dict):
             doc_dict = documents
         elif hasattr(documents, 'tolist'):
             doc_list = documents.tolist()
-            doc_dict = {i: {'document': doc} for i, doc in enumerate(doc_list)}
+            doc_dict = {i: doc for i, doc in enumerate(doc_list)}
         else:
-            raise TypeError(f"Unsupported document structure type: {type(documents)}")
+            raise TypeError(f"Unsupported documents structure type: {type(documents)}")
 
-        filtered_results = [
-            {'document': doc} for doc in doc_dict.values()
-            if presenter_name.lower() in doc.get('presenterDisplayName', '').lower()
-        ]
+        # Filter documents based on presenter name
+        filtered_results = []
+        for doc in doc_dict.values():
+            presenter_display_name = doc.get('presenterDisplayName', '')
+            if presenter_name.lower() in presenter_display_name.lower():
+                # Wrap the document in a consistent result format
+                filtered_results.append({'document': doc})
+
         return filtered_results[:100]
     except Exception as e:
         print(f"ERROR: Failed to filter by presenter name '{presenter_name}': {e}")
