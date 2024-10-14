@@ -70,6 +70,15 @@ def filter_out_null_transcripts(results: List[Dict[str, Any]]) -> List[Dict[str,
             filtered_results.append(result)
     return filtered_results
 
+def filter_out_zero_scores(results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Filter out results with a score of 0.0."""
+    filtered_results = []
+    for result in results:
+        score = result.get('score', 0.0)
+        if score != 0.0:
+            filtered_results.append(result)
+    return filtered_results
+
 def filter_by_sdg_tag_from_cache(tag: str) -> List[Dict[str, Any]]:
     """Filter results based on SDG tags from cache."""
     print(f"DEBUG: Filtering results by SDG tag: '{tag}'...")
@@ -197,10 +206,13 @@ def search(request: Request, query: str = Query(..., min_length=1, max_length=10
 
             # Run semantic search
             semantic_results = cached_semantic_search(augmented_query)
+            # Filter out results with null transcripts and zero scores
             semantic_results = filter_out_null_transcripts(semantic_results)
+            semantic_results = filter_out_zero_scores(semantic_results)
 
             # Combine SDG and semantic results
             results = rank_and_combine_results(semantic_results, sdg_results)
+            results = results[:10]
 
         else:
             # Run presenter and semantic searches in parallel
@@ -220,12 +232,14 @@ def search(request: Request, query: str = Query(..., min_length=1, max_length=10
                     elif tag == "semantic":
                         semantic_results = future.result()
 
-            # Filter out null transcripts
+            # Filter out results with null transcripts and zero scores
             presenter_results = filter_out_null_transcripts(presenter_results)
             semantic_results = filter_out_null_transcripts(semantic_results)
+            semantic_results = filter_out_zero_scores(semantic_results)
 
             # Combine and rank results
             results = rank_and_combine_results(presenter_results, semantic_results)
+            results = results[:10]
 
         # Ensure 'sdg_tags' and 'transcript' keys exist
         for result in results:
