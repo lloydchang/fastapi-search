@@ -126,9 +126,6 @@ def search(request: Request, query: str = Query(..., min_length=1, max_length=10
             result['sdg_tags'] = result.get('sdg_tags', [])  # Add empty sdg_tags if not present
             result['transcript'] = result.get('transcript', '')
 
-        # Limit to top 10 results
-        results = results[:10]
-
     except RuntimeError as e:
         print(f"{request_uuid} [Cache Error] {e}")
         raise HTTPException(status_code=503, detail="Precomputed data initialization failed.")
