@@ -100,18 +100,29 @@ def filter_by_sdg_tag_from_cache(tag: str) -> List[Dict[str, Any]]:
         else:
             raise TypeError(f"Unsupported document structure type: {type(documents)}")
 
+        # Normalize the tag
+        tag_normalized = tag.lower().strip()
+
+        # Prepare valid SDG tags set
+        valid_sdg_tags = set(sdg_keywords.keys())
+
         # Filter documents based on SDG tags
         filtered_results = []
         for doc in doc_dict.values():
             sdg_tags = doc.get('sdg_tags', [])
-            sdg_tags_lower = [sdg_tag.lower() for sdg_tag in sdg_tags]
-            if tag.lower() == "sdg":
+            # Normalize sdg_tags
+            sdg_tags_normalized = [str(sdg_tag).lower().strip() for sdg_tag in sdg_tags]
+
+            # Debugging: Print the SDG tags of the document
+            print(f"DEBUG: Document SDG Tags: {sdg_tags_normalized}")
+
+            if tag_normalized == "sdg":
                 # Include all documents related to any SDG
-                if any(sdgt.lower() in sdg_tags_lower for sdgt in sdg_keywords.keys()):
+                if any(sdg_tag in valid_sdg_tags for sdg_tag in sdg_tags_normalized):
                     filtered_results.append({'document': doc})
             else:
                 # Ensure exact match of SDG tag
-                if tag.lower() in sdg_tags_lower:
+                if tag_normalized in sdg_tags_normalized:
                     filtered_results.append({'document': doc})
 
         print(f"DEBUG: Found {len(filtered_results)} results for SDG tag: '{tag}'")
@@ -149,7 +160,7 @@ def filter_by_presenter(presenter_name: str) -> List[Dict[str, Any]]:
             doc_list = documents.tolist()
             doc_dict = {i: doc for i, doc in enumerate(doc_list)}
         else:
-            raise TypeError(f"Unsupported documents structure type: {type(documents)}")
+            raise TypeError(f"Unsupported document structure type: {type(documents)}")
 
         # Filter documents based on presenter name
         filtered_results = []
